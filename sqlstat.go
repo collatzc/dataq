@@ -99,6 +99,12 @@ func (stat *SQLStat) Where(wheres ...string) *SQLStat {
 	return stat
 }
 
+// ClearWhere ...
+func (stat *SQLStat) ClearWhere() *SQLStat {
+	stat.WhereA = nil
+	return stat
+}
+
 // WhereSQL ...
 func (stat *SQLStat) WhereSQL(sql string) *SQLStat {
 	stat.CondSQL = sql
