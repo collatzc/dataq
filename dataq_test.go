@@ -16,9 +16,10 @@ CREATE DATABASE IF NOT EXISTS test;
 USE test;
 CREATE TABLE IF NOT EXISTS Person (
 	ID INT(5) AUTO_INCREMENT,
-	NAME VARCHAR(50) NULL,
-	AGE TINYINT(2) NULL,
-	PROFILE JSON NULL,
+	NAME VARCHAR(50) DEFAULT '',
+	AGE TINYINT(2) DEFAULT 0,
+	PROFILE JSON,
+	CREATED DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	PRIMARY KEY (ID)
 ) ENGINE=MyISAM;
 CREATE TABLE IF NOT EXISTS Info (
@@ -80,9 +81,11 @@ func TestInsert(t *testing.T) {
 	per := []Person{Person{
 		Name: "",
 		Age:  4,
+		// Profile: "{}",
 	}, Person{
 		Name: "BB",
 		Age:  3,
+		// Profile: "{}",
 	}}
 
 	t.Error(db.C().Models(&per))

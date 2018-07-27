@@ -41,8 +41,14 @@ func structsToValue(data interface{}) *reflect.Value {
 func analyseStruct(data interface{}) (table string, column []string, alias []string, values []interface{}, primary SQLPrimary, condition QCond, model *reflect.Value, err error) {
 	tableValues := structToValue(data)
 	tableMeta := tableValues.Type()
+	var _struct SQLStruct
 	if tableValues.Kind() != reflect.Slice {
 		for i := 0; i < tableValues.NumField(); i++ {
+			_field := SQLField{
+				ColText: tableMeta.Field(i).Tag.Get("COL"),
+				Alias:   tableMeta.Field(i).Name,
+				Value:   tableValues.Field(i).Interface(),
+			}
 			column = append(column, tableMeta.Field(i).Tag.Get("COL"))
 			alias = append(alias, tableMeta.Field(i).Name)
 			values = append(values, tableValues.Field(i).Interface())
@@ -64,6 +70,8 @@ func analyseStruct(data interface{}) (table string, column []string, alias []str
 			if len(tableMeta.Field(i).Tag.Get("WHERE")) > 0 {
 				condition.Where += " " + tableMeta.Field(i).Tag.Get("WHERE")
 			}
+			_field.Table = table
+			_struct.Fields = append(_struct.Fields, _field)
 		}
 	} else {
 		if tableValues.Cap() == 0 || tableValues.Len() == 0 {

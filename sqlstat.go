@@ -44,6 +44,20 @@ type SQLStat struct {
 	modValue    *reflect.Value
 }
 
+type SQLField struct {
+	Table      string
+	ColText    string // Field name in DB or a function
+	Alias      string
+	InsertNull interface{}
+	Value      interface{}
+}
+
+type SQLStruct struct {
+	Primary   SQLPrimary
+	Fields    []SQLField
+	Condition QCond
+}
+
 // SQLStatOpts ...
 type SQLStatOpts int
 
