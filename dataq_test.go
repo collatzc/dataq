@@ -1,6 +1,7 @@
 package dataq
 
 import (
+	"database/sql"
 	"fmt"
 	"testing"
 
@@ -78,14 +79,57 @@ func TestInsert(t *testing.T) {
 	t.Error("DBNAME:", db.DBName())
 
 	per := []Person{Person{
-		Name: "",
-		Age:  4,
+		Name:    "",
+		Age:     4,
+		Profile: "{}",
 	}, Person{
-		Name: "BB",
-		Age:  3,
+		Name:    "BB",
+		Age:     3,
+		Profile: "{}",
 	}}
 
-	t.Error(db.C().Models(&per))
+	// per1 := Person{
+	// 	Name: "AA",
+	// 	Age:  4,
+	// }
+
+	model := db.C().Begin()
+	defer model.Commit()
+
+	t.Error(model.Models(&per))
+	// t.Error(model.Models(&per1))
+}
+
+func checkErr(err error, t *testing.T) {
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestRawSQL(t *testing.T) {
+	db, err := sql.Open("mysql", getDSN(t))
+	checkErr(err, t)
+
+	tx, err := db.Begin()
+	checkErr(err, t)
+	defer tx.Rollback()
+
+	result, err := tx.Exec("INSERT INTO `Person` (`ID`, `NAME`, `AGE`, `PROFILE`) VALUES (0, \"AA\", 4, \"\")")
+	fmt.Println("result:", result)
+	// t.Error("Should have a panic")
+	// checkErr(err, t)
+
+	// t.Error(result.RowsAffected())
+
+	stmt, err := tx.Prepare("INSERT INTO `Person` (`ID`, `NAME`, `AGE`) VALUES (?, ?, ?)")
+	// checkErr(err, t)
+
+	res, err := tx.Stmt(stmt).Exec(0, "TX with prepare", 5)
+	// checkErr(err, t)
+	id, err := res.LastInsertId()
+	// checkErr(err, t)
+
+	t.Error("Prepared: ", id)
 }
 
 func TestQuery(t *testing.T) {
@@ -120,35 +164,4 @@ func TestInsInfo(t *testing.T) {
 		Age:  3,
 	}} */
 	// fmt.Println(db.U().Models(&per))
-}
-
-func TestModelToSQL(t *testing.T) {
-	db, err := Open(getDSN(t), 2)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	defer db.Close()
-
-	/*var person Person
-	if err = db.Q().Where("ID=1").Model(&person); err != nil {
-		t.Errorf(err.Error())
-	}
-	fmt.Println(person)*/
-
-	/*var pi PersonInfo
-	err = db.Q().Model(&pi)
-	if err != nil {
-		fmt.Println("No rows are found.")
-		t.Errorf(err.Error())
-		return
-	}
-	fmt.Println(pi)
-
-	var info []Info
-	info = make([]Info, 3)
-	err = db.Q().Models(&info)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	fmt.Println(info)*/
 }

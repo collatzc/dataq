@@ -9,4 +9,5 @@ type SQLI interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 	Stats() sql.DBStats
+	Begin() (*sql.Tx, error)
 }

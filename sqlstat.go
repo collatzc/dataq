@@ -28,6 +28,8 @@ type SQLPrimary struct {
 type SQLStat struct {
 	dbc         *DConn
 	Method      string
+	Tx          *sql.Tx
+	err         error
 	TableNameS  string
 	FieldA      []string
 	JoinSet     SQLJoin
@@ -153,8 +155,36 @@ func (stat *SQLStat) Offset(offset int) *SQLStat {
 	return stat
 }
 
+// Begin a transaction
+func (stat *SQLStat) Begin() *SQLStat {
+	stat.Tx, stat.err = stat.dbc.db.Begin()
+	// fmt.Println(stat.err)
+	return stat
+	// _, err := stat.dbc.db.Exec("START TRANSACTION;SET autocommit=0;")
+	// if err != nil {
+	// 	stat.err = err
+	// }
+	// return stat
+}
+
+// Commit the transaction
+func (stat *SQLStat) Commit() error {
+	// _, err := stat.dbc.db.Exec("COMMIT")
+	// return err
+	return stat.Tx.Commit()
+}
+
+// Rollback a transaction
+func (stat *SQLStat) Rollback() error {
+	// _, err := stat.dbc.db.Exec("ROLLBACK")
+	return stat.Tx.Rollback()
+	// fmt.Println("Rollback:", err)
+	// return err
+}
+
 // SetModel ...
 // Don't need `From` `Select` any more
+// 將會使所有數據都清空
 func (stat *SQLStat) SetModel(model interface{}) *SQLStat {
 	tableName, arrColumn, arrAlias, arrValue,
 		primary, cond, modelValue, err := analyseStruct(model)
@@ -211,7 +241,7 @@ func (join SQLJoin) ToSQL() (sql string) {
 }
 
 // Models return ...
-// the #model will depends on ...
+// the #models will depends on ...
 func (stat *SQLStat) Models(models interface{}) *QResult {
 	if len(stat.TableNameS) == 0 || len(stat.FieldA) == 0 || stat.modValue != nil {
 		stat.SetModel(models)
@@ -248,7 +278,17 @@ func (stat *SQLStat) Models(models interface{}) *QResult {
 	case "INSERT":
 		fallthrough
 	case "UPDATE":
-		rawResult, err := stat.dbc.db.Exec(_sql)
+		var (
+			rawResult sql.Result
+			err       error
+		)
+		if stat.Tx != nil {
+			fmt.Println("in tx")
+			rawResult, err = stat.Tx.Exec(_sql)
+		} else {
+			fmt.Println("NO")
+			rawResult, err = stat.dbc.db.Exec(_sql)
+		}
 		if err != nil {
 			return &QResult{
 				Error: err,
@@ -274,13 +314,21 @@ func (stat *SQLStat) Models(models interface{}) *QResult {
 			LastInsertId: lastInsertID,
 		}
 	case "SELECT":
+		var (
+			rawRows *sql.Rows
+			err     error
+		)
 		// rows.Scan wants '[]interface{}' as an argument, so ...
 		tmpDS = make([]interface{}, nField)
 		values := make([]sql.RawBytes, nField)
 		for i := 0; i < nField; i++ {
 			tmpDS[i] = &values[i]
 		}
-		rawRows, err := stat.dbc.db.Query(_sql)
+		if stat.Tx != nil {
+			rawRows, err = stat.Tx.Query(_sql)
+		} else {
+			rawRows, err = stat.dbc.db.Query(_sql)
+		}
 		if err != nil {
 			return &QResult{
 				Error: err,
