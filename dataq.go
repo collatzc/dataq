@@ -3,12 +3,11 @@ package dataq
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 )
 
 // DConn Database Connection
 type DConn struct {
-	db       SQLI
+	db       QInterface
 	dbName   string
 	debugLvl int
 }
@@ -18,11 +17,11 @@ type DConn struct {
 func Open(args ...interface{}) (dbc *DConn, err error) {
 	lenArgs := len(args)
 	if lenArgs == 0 {
-		err = errors.New("dataq: invalide database source")
+		err = errors.New("dataq: invalid database source")
 	}
 	var (
 		connectString string
-		dbConn        SQLI
+		dbConn        QInterface
 		dbName        string
 		debugLvl      int
 		ok            bool
@@ -35,7 +34,7 @@ func Open(args ...interface{}) (dbc *DConn, err error) {
 	}
 
 	if lenArgs == 2 {
-		// TODO need more params
+		// TODO: need more params
 		if debugLvl, ok = args[1].(int); !ok {
 			debugLvl = int(args[1].(float64))
 		}
@@ -87,119 +86,18 @@ func (dbc *DConn) DBStat() sql.DBStats {
 }
 
 // SQLDB return *sql.DB
-func (dbc *DConn) SQLDB() SQLI {
+func (dbc *DConn) SQLDB() QInterface {
 	return dbc.db
 }
 
-// C as Create return *QStat
-func (dbc *DConn) C() *SQLStat {
-	return &SQLStat{
-		dbc:    dbc.clone(),
-		Method: "INSERT",
+// Model returns a qStat object with default method SQLSelect
+func (dbc *DConn) Model(model interface{}) *QStat {
+	stat := QStat{
+		dbc:         dbc.clone(),
+		Method:      sqlSelect,
+		ValCondType: " OR ",
 	}
-}
+	stat.Model(model)
 
-// Q as Query return *QStat
-func (dbc *DConn) Q() *SQLStat {
-	return &SQLStat{
-		dbc:    dbc.clone(),
-		Method: "SELECT",
-	}
-}
-
-// U as Update return *QStat
-func (dbc *DConn) U() *SQLStat {
-	return &SQLStat{
-		dbc:    dbc.clone(),
-		Method: "UPDATE",
-	}
-}
-
-// UpdatePKStruct return *QResult
-// struct with PK(tag) no null
-func (dbc *DConn) UpdatePKStruct(data interface{}) *QResult {
-	table, updates, cond, err := composeUpdateSQL(data)
-	if err != nil {
-		return &QResult{
-			Error: err,
-		}
-	}
-
-	sql := "UPDATE `" + table + "` SET " + updates + " WHERE " + cond
-
-	result, err := dbc.db.Exec(sql)
-
-	if err != nil {
-		return &QResult{
-			Error: err,
-		}
-	}
-	affectedRows, err := result.RowsAffected()
-
-	return &QResult{
-		AffectedRows: affectedRows,
-		Error:        err,
-	}
-}
-
-// SelectPKStruct () with ...
-// <table> {
-// 	<PK_column>: <condition> `PK:"true"`
-// }
-func (dbc *DConn) SelectPKStruct(data interface{}) error {
-	table, column, cond, pk, model, err := composeQuerySQL(data)
-	if err != nil {
-		return err
-	}
-	var (
-		array []interface{}
-	)
-	sql := fmt.Sprintf("SELECT %s FROM `%s` WHERE %s ORDER BY %s ASC LIMIT 1", column, table, cond, pk)
-
-	nField := model.NumField()
-	array = make([]interface{}, nField)
-	for i := 0; i < nField; i++ {
-		array[i] = model.Field(i).Addr().Interface()
-	}
-	errQueryRow := dbc.db.QueryRow(sql).Scan(array...)
-	return errQueryRow
-}
-
-// InsertStruct return ...
-// support batch mode
-// If batch insertion, `LastInsertId` will be the first element, the last elemnt will have `LastInsertId`+`AffectedRows`-1
-func (dbc *DConn) InsertStruct(data interface{}) *QResult {
-	table, column, values, err := composeInsertSQL(data)
-	if err != nil {
-		panic(err.Error)
-	}
-
-	sql := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", table, column, values)
-
-	fmt.Println(sql)
-
-	result, err := dbc.db.Exec(sql)
-	if err != nil {
-		return &QResult{
-			Error: err,
-		}
-	}
-	affectedRows, err := result.RowsAffected()
-	if err != nil {
-		return &QResult{
-			Error: err,
-		}
-	}
-
-	lastInsertID, err := result.LastInsertId()
-	if err != nil {
-		return &QResult{
-			Error: err,
-		}
-	}
-
-	return &QResult{
-		AffectedRows: affectedRows,
-		LastInsertId: lastInsertID,
-	}
+	return &stat
 }

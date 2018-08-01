@@ -4,14 +4,15 @@ import (
 	"fmt"
 )
 
-// QResult ...
+// QResult encapsulates the result of the SQL query
 type QResult struct {
-	LastInsertId int64
 	AffectedRows int64
+	LastInsertId int64
+	ReturnedRows int64
 	Warning      uint
 	Error        error
 }
 
 func (re *QResult) String() string {
-	return fmt.Sprintf("Query Result {\nAffectedRows: %d\nLastInsertId: %d\nError: %v\n}", re.AffectedRows, re.LastInsertId, re.Error)
+	return fmt.Sprintf("QResult {\n\tAffectedRows: %d\n\tLastInsertId: %d\n\tReturnedRows: %d\n\tError: %v\n}", re.AffectedRows, re.LastInsertId, re.ReturnedRows, re.Error)
 }

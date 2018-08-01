@@ -1,0 +1,3 @@
+{
+	"dsn": "<username>:<password>@localhost:3306/test?parseTime=true&multiStatements=true"
+}
