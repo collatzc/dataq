@@ -280,7 +280,6 @@ func (stat *QStat) Exec() *QResult {
 				case reflect.Struct:
 					// TODO: not only parse Time
 					if _type := modField.Type(); _type.PkgPath() == "time" && _type.Name() == "Time" {
-						fmt.Println(string(values[i]))
 						t, _ := time.Parse(DateTimeFormat, string(values[i]))
 						modField.Set(reflect.ValueOf(t))
 					}
@@ -357,6 +356,7 @@ func (stat *QStat) composeSQL() string {
 		if stat.BeginOffset != 0 {
 			sql += fmt.Sprintf(" OFFSET %v", stat.BeginOffset)
 		}
+		// sql = fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql)
 	case sqlUpdate:
 		sql = stat.sqlStruct.composeUpdateSQL(stat.ValCondType, stat.Filters, stat.RowLimit)
 	}

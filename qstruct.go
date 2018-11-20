@@ -112,7 +112,13 @@ func (_s qStruct) composeSelectFieldSQL() (sql string) {
 				_field.Table,
 				_field.ColName)
 		} else {
-			sql += fmt.Sprintf(" %s,", _field.ColName)
+			if len(_field.Table) != 0 {
+				sql += fmt.Sprintf(" `%s`.`%s`,",
+					_field.Table,
+					_field.ColName)
+			} else {
+				sql += fmt.Sprintf(" %s,", _field.ColName)
+			}
 		}
 	}
 

@@ -37,6 +37,8 @@ func Open(args ...interface{}) (dbc *DConn, err error) {
 		// TODO: need more params
 		if debugLvl, ok = args[1].(int); !ok {
 			debugLvl = int(args[1].(float64))
+		} else {
+			debugLvl = args[1].(int)
 		}
 	}
 

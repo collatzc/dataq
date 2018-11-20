@@ -173,6 +173,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			if hasTag(tableMeta.Field(i).Tag, "RAW") {
 				retStruct.QueryOnly = true
+				_field.ColName = tableMeta.Field(i).Tag.Get("COL")
 				_field.Table = ""
 			}
 
@@ -225,6 +226,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			if hasTag(tableMeta.Field(i).Tag, "RAW") {
 				retStruct.QueryOnly = true
+				_field.ColName = tableMeta.Field(i).Tag.Get("COL")
 				_field.Table = ""
 			}
 
