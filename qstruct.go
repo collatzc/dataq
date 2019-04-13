@@ -301,6 +301,8 @@ func (_s qStruct) composeBatchUpdateSQL() (sql string) {
 		fieldName     = make([]string, lenBatchField)
 		indexName     = _s.Index[0].ColName
 		update        string
+		_cond         string
+		condMap       = make(map[string]bool)
 		condition     string
 	)
 
@@ -312,7 +314,10 @@ func (_s qStruct) composeBatchUpdateSQL() (sql string) {
 					fieldName[_i] = fmt.Sprintf("`%s` = CASE `%s` ", _col, indexName)
 				}
 				fieldName[_i] += fmt.Sprintf("WHEN %#v THEN %#v ", _values["INDEX"], _val)
-				condition += fmt.Sprintf("%#v, ", _values["INDEX"])
+				_cond = fmt.Sprintf("%#v", _values["INDEX"])
+				if !condMap[_cond] {
+					condMap[_cond] = true
+				}
 				if _idx == lenBatchValue {
 					fieldName[_i] += fmt.Sprintf("END")
 				}
@@ -322,6 +327,10 @@ func (_s qStruct) composeBatchUpdateSQL() (sql string) {
 	}
 
 	update = strings.Join(fieldName, ", ")
+
+	for _condition := range condMap {
+		condition += _condition + ", "
+	}
 
 	sql = fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` IN (%s);", _s.Table, update, indexName, condition[:len(condition)-2])
 

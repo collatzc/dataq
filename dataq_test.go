@@ -164,11 +164,13 @@ func TestBatchUpdateSQL(t *testing.T) {
 	t.Error("IsBatchValueEmpty: ", stuP.IsBatchValueEmpty())
 	v11 := make(map[string]interface{})
 	v11["INDEX"] = 1
-	v11["Age"] = 13
+	v11["Age"] = 20
+	v11["Name"] = "Hu"
 	t.Error(v11)
 	v12 := make(map[string]interface{})
 	v12["INDEX"] = 2
-	v12["Age"] = 14
+	v12["Age"] = 27
+	v12["Name"] = "Chen"
 	stuP.AppendBatchValue(v11)
 	stuP.AppendBatchValue(v12)
 	t.Error("After append, empty? ", stuP.IsBatchValueEmpty())
@@ -176,6 +178,49 @@ func TestBatchUpdateSQL(t *testing.T) {
 	t.Error(stuP.composeBatchUpdateSQL())
 }
 
+func TestBatchInsert(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	per := Person{}
+	model := db.Model(per)
+	model.SetBatchMode(true)
+	v1 := map[string]interface{}{
+		"NAME": "Sun",
+		"AGE":  100,
+	}
+	model.AppendBatchValue(v1)
+	v2 := map[string]interface{}{
+		"NAME": "Moon",
+		"AGE":  99,
+	}
+	model.AppendBatchValue(v2)
+	t.Error(model.BatchInsert())
+}
+
+func TestBatchUpdate(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	per := Person{}
+	model := db.Model(per)
+	model.SetBatchMode(true)
+	v1 := map[string]interface{}{
+		"INDEX": 8,
+		"NAME":  "Sun",
+		"AGE":   100,
+	}
+	model.AppendBatchValue(v1)
+	v2 := map[string]interface{}{
+		"INDEX": 7,
+		"NAME":  "Moon",
+		"AGE":   99,
+	}
+	model.AppendBatchValue(v2)
+	t.Error(model.BatchUpdate())
+}
 func TestColFunc(t *testing.T) {
 	db, err := Open(getDSN(t), 2)
 	checkErr(err, t)

@@ -177,6 +177,10 @@ func (stat *QStat) Exec() *QResult {
 	}
 
 	switch stat.Method {
+	case sqlBatchInsert:
+		fallthrough
+	case sqlBatchUpdate:
+		fallthrough
 	case sqlInsert:
 		fallthrough
 	case sqlUpdate:
@@ -330,7 +334,6 @@ func (stat *QStat) composeSQL() string {
 	case sqlInsert:
 		sql = stat.sqlStruct.composeInsertSQL()
 	case sqlBatchInsert:
-		// TODO:
 		sql = stat.sqlStruct.composeBatchInsertSQL()
 	case sqlSelect:
 		sql = stat.sqlStruct.composeSelectSQL(stat.ValCondType, stat.Filters)
@@ -380,6 +383,8 @@ func (stat *QStat) composeSQL() string {
 		}
 	case sqlUpdate:
 		sql = stat.sqlStruct.composeUpdateSQL(stat.ValCondType, stat.Filters, stat.RowLimit)
+	case sqlBatchUpdate:
+		sql = stat.sqlStruct.composeBatchUpdateSQL()
 	}
 
 	return sql
@@ -413,12 +418,17 @@ func (stat *QStat) Update() *QResult {
 	return stat.Exec()
 }
 
+// BatchInsert executes the multiply value insert
+// `AffectedRows` returns the number of rows inserted
+// `LastInsertId` returns the PK of first inserted row
 func (stat *QStat) BatchInsert() *QResult {
 	stat.Method = sqlBatchInsert
 
 	return stat.Exec()
 }
 
+// BatchUpdate executes the CASE-WHEN-THEN update
+// Fieldname case sensitive
 func (stat *QStat) BatchUpdate() *QResult {
 	stat.Method = sqlBatchUpdate
 
