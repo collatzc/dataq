@@ -19,13 +19,26 @@ type qStruct struct {
 	// Joins come from both the struct or user's dynamic definition
 	Joins []string
 	// Wheres come from the struct
-	Wheres    []string
-	Value     *reflect.Value
-	QueryOnly bool
+	Wheres     []string
+	Value      *reflect.Value
+	QueryOnly  bool
+	BatchValue []map[string]interface{}
 }
 
 func (_s qStruct) String() string {
-	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly)
+	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n\tBatchValue:\t%v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly, _s.BatchValue)
+}
+
+func (_s *qStruct) AppendBatchValue(val map[string]interface{}) {
+	_s.BatchValue = append(_s.BatchValue, val)
+}
+
+func (_s *qStruct) ClearBatchValue() {
+	_s.BatchValue = make([]map[string]interface{}, 0)
+}
+
+func (_s qStruct) IsBatchValueEmpty() bool {
+	return len(_s.BatchValue) == 0
 }
 
 func (_s qStruct) hasIndex() bool {
@@ -101,6 +114,29 @@ func (_s qStruct) composeInsertSQL() (sql string) {
 		}
 		sql = fmt.Sprintf("%sINSERT INTO `%s` (%s) VALUES (%s);", sql, _s.Table, col[1:len(col)-1], val[1:len(val)-1])
 	}
+
+	return sql
+}
+
+func (_s qStruct) composeBatchInsertSQL() (sql string) {
+	var (
+		col  string
+		val  string
+		vals string
+	)
+
+	for _idx, _values := range _s.BatchValue {
+		val = ""
+		for _col, _val := range _values {
+			if _idx == 0 {
+				col += fmt.Sprintf(" `%s`,", _col)
+			}
+			val += fmt.Sprintf(" %#v,", _val)
+		}
+		val = val[1 : len(val)-1]
+		vals += "(" + val + "), "
+	}
+	sql = fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s;", _s.Table, col[1:len(col)-1], vals[:len(vals)-2])
 
 	return sql
 }
@@ -233,7 +269,6 @@ func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit in
 			hasCondition = true
 			condition += fmt.Sprintf(" (%s) AND", strings.Join(filters, filterType))
 		}
-		fmt.Println(update)
 		if hasCondition {
 			sql = fmt.Sprintf("%sUPDATE `%s` SET%s WHERE%s;", sql, _s.Table, update[:len(update)-1], condition[:len(condition)-4])
 			if hasLimit {
@@ -243,6 +278,52 @@ func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit in
 			sql = fmt.Sprintf("%sUPDATE `%s` SET%s LIMIT %#v;", sql, _s.Table, update[:len(update)-1], limit)
 		}
 	}
+
+	return sql
+}
+
+// UPDATE categories
+//	SET display_order = CASE id
+//	WHEN 1 THEN 3
+//	WHEN 2 THEN 4
+//	WHEN 3 THEN 5
+//	END,
+//	title = CASE id
+//	WHEN 1 THEN 'New Title 1'
+//	WHEN 2 THEN 'New Title 2'
+//	WHEN 3 THEN 'New Title 3'
+//	END
+//	WHERE id IN (1,2,3)
+func (_s qStruct) composeBatchUpdateSQL() (sql string) {
+	var (
+		lenBatchValue = len(_s.BatchValue) - 1
+		lenBatchField = len(_s.BatchValue[0]) - 1
+		fieldName     = make([]string, lenBatchField)
+		indexName     = _s.Index[0].ColName
+		update        string
+		condition     string
+	)
+
+	for _idx, _values := range _s.BatchValue {
+		_i := 0
+		for _col, _val := range _values {
+			if _col != "INDEX" {
+				if _idx == 0 {
+					fieldName[_i] = fmt.Sprintf("`%s` = CASE `%s` ", _col, indexName)
+				}
+				fieldName[_i] += fmt.Sprintf("WHEN %#v THEN %#v ", _values["INDEX"], _val)
+				condition += fmt.Sprintf("%#v, ", _values["INDEX"])
+				if _idx == lenBatchValue {
+					fieldName[_i] += fmt.Sprintf("END")
+				}
+				_i++
+			}
+		}
+	}
+
+	update = strings.Join(fieldName, ", ")
+
+	sql = fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` IN (%s);", _s.Table, update, indexName, condition[:len(condition)-2])
 
 	return sql
 }

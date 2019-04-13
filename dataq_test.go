@@ -40,6 +40,27 @@ CREATE TRIGGER Per_TRIGGER BEFORE INSERT ON Person
 END;//
 **/
 
+func TestMapWithStringAsKey(t *testing.T) {
+	a := make([]map[string]interface{}, 0, 10)
+	for i := 0; i < 20; i++ {
+		r1 := make(map[string]interface{})
+		r1["Field1"] = fmt.Sprintf("Value1 %d", i)
+		r1["Field2"] = fmt.Sprintf("Value2 %d", i)
+		a = append(a, r1)
+	}
+	t.Error(len(a))
+	for _, item := range a {
+		t.Error(item)
+		if field, ok := item["Field3"]; ok {
+			t.Error("OK", field)
+		}
+	}
+}
+
+func TestSliceEmpty(t *testing.T) {
+
+}
+
 func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
 	if a == b {
 		return
@@ -111,6 +132,48 @@ func TestComposeInsertSQL(t *testing.T) {
 	t.Error(strPp.composeSelectSQL(" AND ", nil))
 	t.Error(strPp.composeInsertSQL())
 	t.Error(strPp.composeUpdateSQL("", nil, 0))
+}
+
+func TestBatchInsertSQL(t *testing.T) {
+	p := PersonInfo{
+		Name: "CC",
+		Age:  12,
+	}
+	stuP, _ := analyseStruct(p)
+	t.Error("IsBatchValueEmpty: ", stuP.IsBatchValueEmpty())
+	v11 := make(map[string]interface{})
+	v11["Name"] = "DD"
+	v11["Age"] = 13
+	t.Error(v11)
+	v12 := make(map[string]interface{})
+	v12["Name"] = "EE"
+	v12["Age"] = 14
+	stuP.AppendBatchValue(v11)
+	stuP.AppendBatchValue(v12)
+	t.Error("After append, empty? ", stuP.IsBatchValueEmpty())
+
+	t.Error(stuP.composeBatchInsertSQL())
+}
+
+func TestBatchUpdateSQL(t *testing.T) {
+	p := PersonInfo{
+		Name: "CC",
+		Age:  12,
+	}
+	stuP, _ := analyseStruct(p)
+	t.Error("IsBatchValueEmpty: ", stuP.IsBatchValueEmpty())
+	v11 := make(map[string]interface{})
+	v11["INDEX"] = 1
+	v11["Age"] = 13
+	t.Error(v11)
+	v12 := make(map[string]interface{})
+	v12["INDEX"] = 2
+	v12["Age"] = 14
+	stuP.AppendBatchValue(v11)
+	stuP.AppendBatchValue(v12)
+	t.Error("After append, empty? ", stuP.IsBatchValueEmpty())
+
+	t.Error(stuP.composeBatchUpdateSQL())
 }
 
 func TestColFunc(t *testing.T) {

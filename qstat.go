@@ -10,20 +10,21 @@ import (
 )
 
 // QStat ...
+// Support multiple value states
 type QStat struct {
-	dbc       *DConn
-	Method    qMethod
-	Tx        *sql.Tx
-	err       error
-	sqlStruct qStruct
-	Filters   []string
-	GroupS    string
-	HavingS   string
-	OrderS    string
-	// Limit
+	dbc         *DConn
+	Method      qMethod
+	Tx          *sql.Tx
+	err         error
+	sqlStruct   qStruct
+	Filters     []string
+	GroupS      string
+	HavingS     string
+	OrderS      string
 	RowLimit    int
 	BeginOffset int
 	ValCondType string
+	BatchMode   bool
 }
 
 // qMethod is the basic method type
@@ -34,6 +35,8 @@ const sqlSelect qMethod = 1
 const sqlUpdate qMethod = 2
 const sqlDelete qMethod = 3
 const sqlCount qMethod = 4
+const sqlBatchInsert qMethod = 5
+const sqlBatchUpdate qMethod = 6
 
 func (stat QStat) String() string {
 	return fmt.Sprintf("Query Statement {\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
@@ -129,6 +132,18 @@ func (stat *QStat) Commit() error {
 // Rollback a transaction
 func (stat *QStat) Rollback() error {
 	return stat.Tx.Rollback()
+}
+
+// SetBatchMode is the Setter of the BatchMode
+func (stat *QStat) SetBatchMode(val bool) *QStat {
+	stat.BatchMode = val
+	return stat
+}
+
+// AppendBatchValue append the maps-type value when batch mode enabled
+func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
+	stat.sqlStruct.AppendBatchValue(val)
+	return stat
 }
 
 // SetModel will only analyse the model without query to database
@@ -314,6 +329,9 @@ func (stat *QStat) composeSQL() string {
 	switch stat.Method {
 	case sqlInsert:
 		sql = stat.sqlStruct.composeInsertSQL()
+	case sqlBatchInsert:
+		// TODO:
+		sql = stat.sqlStruct.composeBatchInsertSQL()
 	case sqlSelect:
 		sql = stat.sqlStruct.composeSelectSQL(stat.ValCondType, stat.Filters)
 
@@ -340,9 +358,10 @@ func (stat *QStat) composeSQL() string {
 		}
 	case sqlCount:
 		sql = stat.sqlStruct.composeCountSQL(stat.ValCondType, stat.Filters)
-
+		hasGroupBy := false
 		if stat.GroupS != "" {
 			sql += fmt.Sprintf(" %v", stat.GroupS)
+			hasGroupBy = true
 		}
 
 		if stat.HavingS != "" {
@@ -356,7 +375,9 @@ func (stat *QStat) composeSQL() string {
 		if stat.BeginOffset != 0 {
 			sql += fmt.Sprintf(" OFFSET %v", stat.BeginOffset)
 		}
-		// sql = fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql)
+		if hasGroupBy {
+			sql = fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql)
+		}
 	case sqlUpdate:
 		sql = stat.sqlStruct.composeUpdateSQL(stat.ValCondType, stat.Filters, stat.RowLimit)
 	}
@@ -388,6 +409,18 @@ func (stat *QStat) Count() *QResult {
 // Update return *QResult
 func (stat *QStat) Update() *QResult {
 	stat.Method = sqlUpdate
+
+	return stat.Exec()
+}
+
+func (stat *QStat) BatchInsert() *QResult {
+	stat.Method = sqlBatchInsert
+
+	return stat.Exec()
+}
+
+func (stat *QStat) BatchUpdate() *QResult {
+	stat.Method = sqlBatchUpdate
 
 	return stat.Exec()
 }

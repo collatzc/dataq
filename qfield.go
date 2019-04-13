@@ -7,7 +7,8 @@ type qField struct {
 	Table string
 	// Field name in DB or a function
 	ColName string
-	AsNull  interface{}
+	// This value will be interpreted as NULL
+	AsNull interface{}
 	// Alternative
 	Alt     interface{}
 	ValIdx  int
