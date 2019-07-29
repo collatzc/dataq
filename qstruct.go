@@ -3,6 +3,7 @@ package dataq
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -19,10 +20,12 @@ type qStruct struct {
 	// Joins come from both the struct or user's dynamic definition
 	Joins []string
 	// Wheres come from the struct
-	Wheres     []string
-	Value      *reflect.Value
-	QueryOnly  bool
-	BatchValue []map[string]interface{}
+	Wheres                []string
+	Value                 *reflect.Value
+	QueryOnly             bool
+	BatchValue            []map[string]interface{}
+	OnDuplicateKeyUpdate  bool
+	DuplicateKeyUpdateCol map[string]interface{}
 }
 
 func (_s qStruct) String() string {
@@ -123,20 +126,38 @@ func (_s qStruct) composeBatchInsertSQL() (sql string) {
 		col  string
 		val  string
 		vals string
+		keys []string
 	)
 
 	for _idx, _values := range _s.BatchValue {
 		val = ""
-		for _col, _val := range _values {
-			if _idx == 0 {
-				col += fmt.Sprintf(" `%s`,", _col)
+		// TODO: sort with sort.Strings
+
+		if _idx == 0 {
+			for _key := range _values {
+				keys = append(keys, _key)
 			}
-			val += fmt.Sprintf(" %#v,", _val)
+			sort.Strings(keys)
+			for _, _key := range keys {
+				col += fmt.Sprintf(" `%s`,", _key)
+			}
+		}
+		for _, _key := range keys {
+			val += fmt.Sprintf(" %#v,", _values[_key])
 		}
 		val = val[1 : len(val)-1]
 		vals += "(" + val + "), "
 	}
 	sql = fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s;", _s.Table, col[1:len(col)-1], vals[:len(vals)-2])
+
+	if _s.OnDuplicateKeyUpdate {
+		val = ""
+		for _col, _val := range _s.DuplicateKeyUpdateCol {
+			val += fmt.Sprintf(" `%s` = %s,", _col, _val)
+		}
+		val = val[1 : len(val)-1]
+		sql = fmt.Sprintf("%s ON DUPLICATE KEY UPDATE %s", sql[0:len(sql)-1], val)
+	}
 
 	return sql
 }

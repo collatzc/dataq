@@ -148,6 +148,11 @@ func TestBatchInsertSQL(t *testing.T) {
 	v12 := make(map[string]interface{})
 	v12["Name"] = "EE"
 	v12["Age"] = 14
+	stuP.OnDuplicateKeyUpdate = true
+	duplicateKeyUpdateCol := make(map[string]interface{})
+	duplicateKeyUpdateCol["Name"] = "VALUES(`Name`)"
+	duplicateKeyUpdateCol["Age"] = "`Age` + VALUES(`Age`)"
+	stuP.DuplicateKeyUpdateCol = duplicateKeyUpdateCol
 	stuP.AppendBatchValue(v11)
 	stuP.AppendBatchValue(v12)
 	t.Error("After append, empty? ", stuP.IsBatchValueEmpty())

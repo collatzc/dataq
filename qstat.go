@@ -140,6 +140,25 @@ func (stat *QStat) SetBatchMode(val bool) *QStat {
 	return stat
 }
 
+// SetOnDuplicateKeyUpdate is the Setter of the OnDuplicateKeyUpdate
+func (stat *QStat) SetOnDuplicateKeyUpdate(val bool) *QStat {
+	stat.sqlStruct.OnDuplicateKeyUpdate = val
+	return stat
+}
+
+// SetOnDuplicateKeyUpdateNCol is the Setter of the OnDuplicateKeyUpdate and DuplicateKeyUpdateCol
+func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]interface{}) *QStat {
+	stat.sqlStruct.OnDuplicateKeyUpdate = val
+	stat.sqlStruct.DuplicateKeyUpdateCol = colDefine
+	return stat
+}
+
+// SetDuplicateKeyUpdateCol is the Setter of the DuplicateKeyUpdateCol
+func (stat *QStat) SetDuplicateKeyUpdateCol(colDefine map[string]interface{}) *QStat {
+	stat.sqlStruct.DuplicateKeyUpdateCol = colDefine
+	return stat
+}
+
 // AppendBatchValue append the maps-type value when batch mode enabled
 func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
 	stat.sqlStruct.AppendBatchValue(val)
