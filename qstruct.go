@@ -24,12 +24,13 @@ type qStruct struct {
 	Value                 *reflect.Value
 	QueryOnly             bool
 	BatchValue            []map[string]interface{}
+	Schema                []string
 	OnDuplicateKeyUpdate  bool
 	DuplicateKeyUpdateCol map[string]interface{}
 }
 
 func (_s qStruct) String() string {
-	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n\tBatchValue:\t%v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly, _s.BatchValue)
+	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n\tBatchValue:\t%v\nSchema:\t%v\nOnDuplicateKeyUpdate: %v\nDuplicateKeyUpdateCol: %v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly, _s.BatchValue, _s.Schema, _s.OnDuplicateKeyUpdate, _s.DuplicateKeyUpdateCol)
 }
 
 func (_s *qStruct) AppendBatchValue(val map[string]interface{}) {
@@ -59,18 +60,22 @@ func (_s qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
 }
 
 func (_s qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
-	var typeName string
+	var typeName reflect.Type
 	if _s.Value.Kind() != reflect.Slice {
-		typeName = _s.Value.Field(idxField).Type().Name()
+		typeName = _s.Value.Field(idxField).Type()
 		ret = _s.Value.Field(idxField).Interface()
 	} else {
-		typeName = _s.Value.Index(idxArray).Field(idxField).Type().Name()
+		typeName = _s.Value.Index(idxArray).Field(idxField).Type()
 		ret = _s.Value.Index(idxArray).Field(idxField).Interface()
 	}
-	switch typeName {
+	// TODO: uint output 0x00
+	switch typeName.Name() {
 	case "Time":
 		return ret.(time.Time).Format(DateTimeFormat)
 	default:
+		if typeName.Kind() == reflect.Map {
+			return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
+		}
 		return ret
 	}
 }
@@ -102,20 +107,40 @@ func (_s qStruct) hasWheres() bool {
 
 func (_s qStruct) composeInsertSQL() (sql string) {
 	var (
-		col string
-		val string
+		colVal map[string][]string
+		key    string
+		col    []string
+		val    []string
 	)
 	for i := 0; i < _s.Length; i++ {
-		col = ""
-		val = ""
+		colVal = make(map[string][]string)
 		for _, _field := range _s.Fields {
 			// will ignore `TABLE`. prefix
 			if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
-				col += fmt.Sprintf(" `%s`,", _field.ColName)
-				val += fmt.Sprintf(" %#v,", _s.getValueInterface(_field.ValIdx, i))
+				key = fmt.Sprintf("`%s`", _field.ColName)
+				if colVal[key] == nil {
+					colVal[key] = make([]string, 0)
+				}
+				if _field.Json != "" {
+					colVal[key] = append(colVal[key], fmt.Sprintf("'%s', %#v", _field.Json, _s.getValueInterface(_field.ValIdx, i)))
+				} else {
+					colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _s.getValueInterface(_field.ValIdx, i)))
+				}
 			}
 		}
-		sql = fmt.Sprintf("%sINSERT INTO `%s` (%s) VALUES (%s);", sql, _s.Table, col[1:len(col)-1], val[1:len(val)-1])
+		col = make([]string, 0, len(colVal))
+		val = make([]string, 0, len(colVal))
+
+		for _key, _val := range colVal {
+			col = append(col, _key)
+			if len(_val) > 1 {
+				val = append(val, fmt.Sprintf("JSON_OBJECT(%s)", strings.Join(_val, ", ")))
+			} else {
+				val = append(val, strings.Join(_val, ", "))
+			}
+		}
+
+		sql = fmt.Sprintf("%sINSERT INTO `%s` (%s) VALUES (%s);", sql, _s.Table, strings.Join(col, ", "), strings.Join(val, ", "))
 	}
 
 	return sql
@@ -163,23 +188,14 @@ func (_s qStruct) composeBatchInsertSQL() (sql string) {
 }
 
 func (_s qStruct) composeSelectFieldSQL() (sql string) {
+	var (
+		fields = make([]string, 0, len(_s.Fields))
+	)
 	for _, _field := range _s.Fields {
-		if _s.QueryOnly == false {
-			sql += fmt.Sprintf(" `%s`.`%s`,",
-				_field.Table,
-				_field.ColName)
-		} else {
-			if len(_field.Table) != 0 {
-				sql += fmt.Sprintf(" `%s`.`%s`,",
-					_field.Table,
-					_field.ColName)
-			} else {
-				sql += fmt.Sprintf(" %s,", _field.ColName)
-			}
-		}
+		fields = append(fields, _field.SelectString())
 	}
 
-	return sql[1 : len(sql)-1]
+	return strings.Join(fields, ", ")
 }
 
 func (_s qStruct) composeSelectSQL(filterType string, filters []string) (sql string) {
@@ -253,7 +269,10 @@ func (_s qStruct) composeCountSQL(filterType string, filters []string) (sql stri
 // TODO: Support joint table update!
 func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit int) (sql string) {
 	var (
+		updates      []string
 		update       string
+		colVal       map[string][]string
+		key          string
 		condition    string
 		hasCondition bool
 		hasLimit     = limit != 0
@@ -263,14 +282,42 @@ func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit in
 		update = ""
 		condition = ""
 		hasCondition = false
+		colVal = make(map[string][]string)
 		for _, _field := range _s.Fields {
 			if _field.IsIndex == false && _field.Table == _s.Table {
-				if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
-					update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _s.getValueInterface(_field.ValIdx, i))
-				} else if _field.Alt != nil && !isEqual(_field.AsNull, _field.Alt) {
-					update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _field.Alt)
+				key = fmt.Sprintf("`%s`", _field.ColName)
+				if colVal[key] == nil {
+					colVal[key] = make([]string, 0)
 				}
-				// if AsNull == Alt, ignore!
+				if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
+					if _field.Json != "" {
+						colVal[key] = append(colVal[key], fmt.Sprintf("%s', %#v", _field.Json, _s.getValueInterface(_field.ValIdx, i)))
+					} else {
+						colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _s.getValueInterface(_field.ValIdx, i)))
+					}
+					// update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _s.getValueInterface(_field.ValIdx, i))
+				} else if _field.Alt != nil && !isEqual(_field.AsNull, _field.Alt) {
+					// if AsNull == Alt, ignore!
+					if _field.Json != "" {
+						colVal[key] = append(colVal[key], fmt.Sprintf("'$.%s', %#v", _field.Json, _field.Alt))
+					} else {
+						colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _field.Alt))
+					}
+					// update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _field.Alt)
+				}
+			}
+		}
+		updates = make([]string, 0, len(colVal))
+
+		for _key, _val := range colVal {
+			if len(_val) > 0 {
+				update = fmt.Sprintf("%s=", _key)
+				if len(_val) > 1 {
+					update += fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _key, _key, strings.Join(_val, ", '$."), strings.Join(_val, ", '"))
+				} else {
+					update += _val[0]
+				}
+				updates = append(updates, update)
 			}
 		}
 
@@ -290,13 +337,14 @@ func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit in
 			hasCondition = true
 			condition += fmt.Sprintf(" (%s) AND", strings.Join(filters, filterType))
 		}
+
 		if hasCondition {
-			sql = fmt.Sprintf("%sUPDATE `%s` SET%s WHERE%s;", sql, _s.Table, update[:len(update)-1], condition[:len(condition)-4])
+			sql = fmt.Sprintf("%sUPDATE `%s` SET%s WHERE%s;", sql, _s.Table, strings.Join(updates, ", "), condition[:len(condition)-4])
 			if hasLimit {
 				sql = fmt.Sprintf("%s LIMIT %#v;", sql[:len(sql)-1], limit)
 			}
 		} else if hasLimit {
-			sql = fmt.Sprintf("%sUPDATE `%s` SET%s LIMIT %#v;", sql, _s.Table, update[:len(update)-1], limit)
+			sql = fmt.Sprintf("%sUPDATE `%s` SET%s LIMIT %#v;", sql, _s.Table, strings.Join(updates, ", "), limit)
 		}
 	}
 
@@ -356,4 +404,24 @@ func (_s qStruct) composeBatchUpdateSQL() (sql string) {
 	sql = fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` IN (%s);", _s.Table, update, indexName, condition[:len(condition)-2])
 
 	return sql
+}
+
+func (_s qStruct) composeCreateTableSQL() (sql string) {
+	var (
+		fields = make([]string, len(_s.Fields))
+	)
+
+	for _idx, _values := range _s.Fields {
+		fields[_idx] = fmt.Sprintf("`%s` %s", _values.ColName, _values.Schema)
+	}
+
+	fieldsDef := strings.Join(fields, ", ")
+	indexDef := strings.Join(_s.Schema, ", ")
+	if indexDef != "" {
+		indexDef = ", " + indexDef
+	}
+
+	sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;", _s.Table, fieldsDef, indexDef)
+
+	return
 }

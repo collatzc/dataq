@@ -33,6 +33,7 @@ func structsToValue(data interface{}) *reflect.Value {
 func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) (theCol, theTable, nextTable string) {
 	theCol = tag.Get("COL")
 	nextTable = tag.Get("TABLE")
+	json := tag.Get("JSON")
 	if theCol != "" {
 		idxPoint := strings.Index(theCol, ".")
 		if idxPoint != -1 {
@@ -53,6 +54,12 @@ func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) 
 	if nextTable == "" {
 		nextTable = prevTable
 	}
+
+	if json != "" {
+		keys := strings.Split(json, ".")
+		theCol = keys[0]
+	}
+
 	return theCol, theTable, nextTable
 }
 
@@ -81,6 +88,11 @@ func parseInterface(typeName reflect.Type, str string) (val interface{}) {
 		}
 	case "string":
 		val = str
+	default:
+		// TODO: some keys can be nil
+		if typeName.Kind() == reflect.Map {
+			val = str
+		}
 	}
 
 	return val
@@ -101,7 +113,12 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 		case "bool":
 			asNull = false
 		case "Time":
+			// asNull = "0001-01-01 00:00:00 +0000 UTC"
 			asNull = "0001-01-01T00:00:00Z"
+		default:
+			if field.Type.Kind() == reflect.Map {
+				asNull = "(nil)"
+			}
 		}
 	} else {
 		asNull = parseInterface(field.Type, asNulls)
@@ -118,6 +135,15 @@ func getAlt(field reflect.StructField) (alt interface{}) {
 	}
 
 	return nil
+}
+
+func getTagJson(field reflect.StructField) (tagJson string) {
+	tagJson = field.Tag.Get("JSON")
+	if strings.Contains(tagJson, ".") {
+		tagJson = strings.Split(tagJson, ".")[1]
+	}
+
+	return
 }
 
 func hasTag(tag reflect.StructTag, label string) bool {
@@ -177,6 +203,13 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.Table = ""
 			}
 
+			if hasTag(tableMeta.Field(i).Tag, "SCHEMAF") {
+				_field.Schema = tableMeta.Field(i).Tag.Get("SCHEMAF")
+			}
+			if hasTag(tableMeta.Field(i).Tag, "SCHEMAT") {
+				retStruct.Schema = append(retStruct.Schema, tableMeta.Field(i).Tag.Get("SCHEMAT"))
+			}
+
 			if !emptyTag(tableMeta.Field(i).Tag, "JOIN") {
 				retStruct.Joins = append(retStruct.Joins, tableMeta.Field(i).Tag.Get("JOIN"))
 			}
@@ -186,6 +219,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
+			_field.Json = getTagJson(tableMeta.Field(i))
 
 			if hasTag(tableMeta.Field(i).Tag, "INDEX") {
 				_field.IsIndex = true
@@ -230,6 +264,13 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.Table = ""
 			}
 
+			if hasTag(tableMeta.Field(i).Tag, "SCHEMAF") {
+				_field.Schema = tableMeta.Field(i).Tag.Get("SCHEMAF")
+			}
+			if hasTag(tableMeta.Field(i).Tag, "SCHEMAT") {
+				retStruct.Schema = append(retStruct.Schema, tableMeta.Field(i).Tag.Get("SCHEMAT"))
+			}
+
 			if !emptyTag(tableMeta.Field(i).Tag, "JOIN") {
 				retStruct.Joins = append(retStruct.Joins, tableMeta.Field(i).Tag.Get("JOIN"))
 			}
@@ -239,6 +280,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
+			_field.Json = getTagJson(tableMeta.Field(i))
 
 			retStruct.Length = tableValues.Len()
 
@@ -252,6 +294,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 		retStruct.Value = tableValues
 	}
 
+	// `FROM <tablename>` will omit
 	if noFrom == true {
 		retStruct.QueryOnly = true
 		retStruct.Table = ""

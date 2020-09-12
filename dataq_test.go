@@ -57,8 +57,33 @@ func TestMapWithStringAsKey(t *testing.T) {
 	}
 }
 
-func TestSliceEmpty(t *testing.T) {
+func TestConvertMapToJSON(t *testing.T) {
+	config := map[string]interface{}{
+		"currentTermName": "2020WS",
+		"currentTermGUID": "asdfasdfasdfasfd",
+		"todoInt":         2,
+	}
+	refVal := reflect.ValueOf(config)
 
+	t.Error(refVal.Type().Name())
+	t.Errorf("%v", refVal.Kind())
+	if refVal.Kind() == reflect.Map {
+		t.Error("map yes")
+	}
+	if fmt.Sprintf("%v", refVal.Type()) != "map[string]interface {}" {
+		t.Error("no")
+	}
+
+	t.Errorf("%#v", config)
+}
+
+func TestAsNull(t *testing.T) {
+	var a map[string]interface{}
+	var str = "map[string]interface {}(nil)"
+	var iii = "1"
+	var testTime = time.Time{}
+	t.Errorf("%#v %#v %v", a, str, iii)
+	t.Errorf("%v", testTime)
 }
 
 func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
@@ -95,6 +120,25 @@ type Person struct {
 	Omit    string    `OMIT:""`
 }
 
+type PersonJson struct {
+	ID       int64     `INDEX:"" COL:"ID" TABLE:"Person"`
+	Name     string    `COL:"NAME" ALT:""`
+	Age      int       `COL:"AGE"`
+	Password string    `JSON:"PROFILE.password" json:"password"`
+	Username string    `JSON:"PROFILE.userName" json:"username"`
+	Created  time.Time `COL:"CREATED"`
+	Omit     string    `OMIT:""`
+}
+
+type PersonNoTable struct {
+	ID      int64     `COL:"ID" SCHEMAF:"int unsigned AUTO_INCREMENT" SCHEMAT:"PRIMARY KEY(ID)"`
+	Name    string    `COL:"NAME" ALT:"" SCHEMAF:"varchar(20) DEFAULT ''"`
+	Age     int       `COL:"AGE" SCHEMAF:"tinyint DEFAULT '0'"`
+	Profile string    `COL:"PROFILE" ALT:"{}" SCHEMAF:"JSON"`
+	Created time.Time `COL:"CREATED" SCHEMAF:"datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
+	Omit    string    `OMIT:""`
+}
+
 type CurrTimestamp struct {
 	Timestamp string `COL:"CURRENT_TIMESTAMP" NOFROM:""`
 	Date      string `COL:"CURDATE()" NOTABLE:""`
@@ -112,22 +156,27 @@ type PersonInfo struct {
 }
 
 func TestComposeInsertSQL(t *testing.T) {
-	p := PersonInfo{
-		Name: "CC",
-		Age:  12,
+	p := PersonJson{
+		ID:       3,
+		Name:     "CC",
+		Age:      12,
+		Password: "password123123123",
+		Username: "username123123123",
 	}
 	stuP, _ := analyseStruct(p)
 	t.Error(stuP.composeInsertSQL())
 	t.Error(stuP.composeUpdateSQL("", nil, 0))
 	t.Error(stuP.composeSelectSQL(" OR ", nil))
-	pp := []Person{Person{
-		Name: "",
-		Age:  4,
-	}, Person{
-		Name:    "BB",
-		Age:     3,
-		Profile: "{}",
-	}}
+	pp := []Person{
+		{
+			Name: "",
+			Age:  4,
+		}, {
+			Name:    "BB",
+			Age:     3,
+			Profile: "{}",
+		},
+	}
 	strPp, _ := analyseStruct(&pp)
 	t.Error(strPp.composeSelectSQL(" AND ", nil))
 	t.Error(strPp.composeInsertSQL())
@@ -246,13 +295,15 @@ func TestInsert(t *testing.T) {
 
 	t.Error("DBNAME:", db.DBName())
 
-	per := []Person{Person{
-		Name: "P5",
-		Age:  3,
-	}, Person{
-		Name: "P6",
-		Age:  4,
-	}}
+	per := []Person{
+		{
+			Name: "P1",
+			Age:  1,
+		}, {
+			Name: "P2",
+			Age:  2,
+		},
+	}
 
 	// per1 := Person{
 	// 	Name: "AA",
@@ -303,17 +354,46 @@ func TestRawSQL(t *testing.T) {
 	t.Error("Prepared: ", id)
 }
 
+func TestDynamicTableName(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	p := make([]PersonNoTable, 2)
+	m := db.Model(p)
+	// Set the tablename @runtime
+	m.Table("Person")
+	res := m.Query()
+	t.Error(res)
+	t.Error(p)
+}
+
+func TestCreateTable(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	p := PersonNoTable{}
+	m := db.Model(p)
+	m.TableSchema("KEY `kName` (`NAME`)",
+		"KEY `kAge` (`AGE`)")
+
+	m.Table("Person2")
+	res := m.CreateTable()
+	t.Error(res)
+}
+
 func TestUpdate(t *testing.T) {
 	db, err := Open(getDSN(t), 2)
 	checkErr(err, t)
 	defer db.Close()
 
 	per1 := []Person{
-		Person{
+		{
 			ID:  2,
 			Age: 6,
 		},
-		Person{
+		{
 			ID:  4,
 			Age: 8,
 		},
@@ -332,10 +412,10 @@ func TestQuery(t *testing.T) {
 	defer db.Close()
 	// per1 := make([]Person, 2)
 	per1 := []Person{
-		Person{
+		{
 			ID: 2,
 		},
-		Person{
+		{
 			ID: 4,
 		},
 	}

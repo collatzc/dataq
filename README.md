@@ -67,3 +67,6 @@
 * `OMIT` - This field will be ignored in query.
 * `NOFROM` - [Query only!] No `FROM` clause will be generated.
 * `RAW` - [Query only!] Will query with what the Tag `COL` has.
+* `SCHEMAF` - [CreateTable only!] the define string for the field.
+* `SCHEMAT` - [CreateTable only!] the define string for the table.
+	* 问题：无法使用````符号了！解决：可以用

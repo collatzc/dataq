@@ -2,6 +2,7 @@ package dataq
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -37,14 +38,23 @@ const sqlDelete qMethod = 3
 const sqlCount qMethod = 4
 const sqlBatchInsert qMethod = 5
 const sqlBatchUpdate qMethod = 6
+const sqlCreateTable qMethod = 100
 
 func (stat QStat) String() string {
 	return fmt.Sprintf("Query Statement {\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
 }
 
-// From which table?
-func (stat *QStat) From(table string) *QStat {
+// Table which table?
+func (stat *QStat) Table(table string) *QStat {
 	stat.sqlStruct.Table = table
+
+	return stat
+}
+
+// IndexWith sets the i-th (start from 0) Field as Index
+func (stat *QStat) IndexWith(i int) *QStat {
+	stat.sqlStruct.Fields[i].IsIndex = true
+	stat.sqlStruct.Index = append(stat.sqlStruct.Index, stat.sqlStruct.Fields[i])
 
 	return stat
 }
@@ -134,6 +144,12 @@ func (stat *QStat) Rollback() error {
 	return stat.Tx.Rollback()
 }
 
+func (stat *QStat) TableSchema(defs ...string) *QStat {
+	stat.sqlStruct.Schema = append(stat.sqlStruct.Schema, defs...)
+
+	return stat
+}
+
 // SetBatchMode is the Setter of the BatchMode
 func (stat *QStat) SetBatchMode(val bool) *QStat {
 	stat.BatchMode = val
@@ -171,8 +187,8 @@ func (stat *QStat) SetModel(model interface{}) *QStat {
 	stat.sqlStruct, err = analyseStruct(model)
 	panicErrHandle(err)
 
-	if stat.dbc.debugLvl > 1 {
-		fmt.Println("=== Model Struct ===")
+	if stat.dbc.debugLvl > 3 {
+		fmt.Println("=== Init Model Struct ===")
 		fmt.Println(stat.sqlStruct)
 	}
 
@@ -321,6 +337,15 @@ func (stat *QStat) Exec() *QResult {
 						t, _ := time.Parse(DateTimeFormat, string(values[i]))
 						modField.Set(reflect.ValueOf(t))
 					}
+				case reflect.Map:
+					var _map map[string]interface{}
+					err := json.Unmarshal(values[i], &_map)
+					if err != nil {
+						return &QResult{
+							Error: err,
+						}
+					}
+					modField.Set(reflect.ValueOf(_map))
 				}
 			}
 			rowNumber++
@@ -336,6 +361,32 @@ func (stat *QStat) Exec() *QResult {
 		stat.dbc.db.QueryRow(_sql).Scan(&res.ReturnedRows)
 
 		return &res
+	case sqlCreateTable:
+		rawResult, err := stat.dbc.db.Exec(_sql)
+		if err != nil {
+			return &QResult{
+				Error: err,
+			}
+		}
+
+		affectedRows, err := rawResult.RowsAffected()
+		if err != nil {
+			return &QResult{
+				Error: err,
+			}
+		}
+
+		lastInsertID, err := rawResult.LastInsertId()
+		if err != nil {
+			return &QResult{
+				Error: err,
+			}
+		}
+
+		return &QResult{
+			LastInsertId: lastInsertID,
+			AffectedRows: affectedRows,
+		}
 	}
 
 	return &QResult{}
@@ -404,6 +455,8 @@ func (stat *QStat) composeSQL() string {
 		sql = stat.sqlStruct.composeUpdateSQL(stat.ValCondType, stat.Filters, stat.RowLimit)
 	case sqlBatchUpdate:
 		sql = stat.sqlStruct.composeBatchUpdateSQL()
+	case sqlCreateTable:
+		sql = stat.sqlStruct.composeCreateTableSQL()
 	}
 
 	return sql
@@ -450,6 +503,14 @@ func (stat *QStat) BatchInsert() *QResult {
 // Fieldname case sensitive
 func (stat *QStat) BatchUpdate() *QResult {
 	stat.Method = sqlBatchUpdate
+
+	return stat.Exec()
+}
+
+// CreateTable creates a table defined by qStruct
+// each field must have `SCHEMA` tag
+func (stat *QStat) CreateTable() *QResult {
+	stat.Method = sqlCreateTable
 
 	return stat.Exec()
 }
