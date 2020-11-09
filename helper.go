@@ -113,8 +113,8 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 		case "bool":
 			asNull = false
 		case "Time":
-			// asNull = "0001-01-01 00:00:00 +0000 UTC"
-			asNull = "0001-01-01T00:00:00Z"
+			// asNull = "0001-01-01T00:00:00Z"
+			asNull = "0001-01-01 00:00:00+00:00"
 		default:
 			if field.Type.Kind() == reflect.Map {
 				asNull = "(nil)"
@@ -203,12 +203,12 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.Table = ""
 			}
 
-			if hasTag(tableMeta.Field(i).Tag, "SCHEMAF") {
-				_field.Schema = tableMeta.Field(i).Tag.Get("SCHEMAF")
-			}
+			_field.Schema = tableMeta.Field(i).Tag.Get("SCHEMAF")
 			if hasTag(tableMeta.Field(i).Tag, "SCHEMAT") {
 				retStruct.Schema = append(retStruct.Schema, tableMeta.Field(i).Tag.Get("SCHEMAT"))
 			}
+
+			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
 
 			if !emptyTag(tableMeta.Field(i).Tag, "JOIN") {
 				retStruct.Joins = append(retStruct.Joins, tableMeta.Field(i).Tag.Get("JOIN"))
@@ -281,6 +281,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Json = getTagJson(tableMeta.Field(i))
+			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
 
 			retStruct.Length = tableValues.Len()
 

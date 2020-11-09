@@ -1,27 +1,24 @@
 package dataq
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 type qStruct struct {
-	// Table name comes from the struct
-	Table string
-	// Length comes from the struct
-	Length int
-	// Index come from the struct
-	Index []qField
-	// Fields come from the struct
-	Fields []qField
-	// Joins come from both the struct or user's dynamic definition
-	Joins []string
-	// Wheres come from the struct
+	Table                 string
+	Length                int
+	Index                 []qField
+	Fields                []qField
+	Joins                 []string
 	Wheres                []string
 	Value                 *reflect.Value
+	Values                []interface{}
 	QueryOnly             bool
 	BatchValue            []map[string]interface{}
 	Schema                []string
@@ -29,9 +26,30 @@ type qStruct struct {
 	DuplicateKeyUpdateCol map[string]interface{}
 }
 
-func (_s qStruct) String() string {
-	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n\tBatchValue:\t%v\nSchema:\t%v\nOnDuplicateKeyUpdate: %v\nDuplicateKeyUpdateCol: %v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly, _s.BatchValue, _s.Schema, _s.OnDuplicateKeyUpdate, _s.DuplicateKeyUpdateCol)
+type qClause struct {
+	Operator string
+	Template string
+	Values   []interface{}
 }
+
+type columnMapValue map[string]*columnValue
+
+type columnMapPkValues map[string]map[interface{}]*columnValue
+
+type columnValue struct {
+	Stmt []string
+	Pk   interface{}
+	Val  []interface{}
+	Type string
+}
+
+var (
+	columnValuePool = sync.Pool{
+		New: func() interface{} {
+			return new(columnValue)
+		},
+	}
+)
 
 func (_s *qStruct) AppendBatchValue(val map[string]interface{}) {
 	_s.BatchValue = append(_s.BatchValue, val)
@@ -41,15 +59,15 @@ func (_s *qStruct) ClearBatchValue() {
 	_s.BatchValue = make([]map[string]interface{}, 0)
 }
 
-func (_s qStruct) IsBatchValueEmpty() bool {
+func (_s *qStruct) IsBatchValueEmpty() bool {
 	return len(_s.BatchValue) == 0
 }
 
-func (_s qStruct) hasIndex() bool {
+func (_s *qStruct) hasIndex() bool {
 	return len(_s.Index) != 0
 }
 
-func (_s qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
+func (_s *qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
 	if _s.Value.Kind() != reflect.Slice {
 		ret = _s.Value.Field(idxField)
 	} else {
@@ -59,7 +77,7 @@ func (_s qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
 	return ret
 }
 
-func (_s qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
+func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	var typeName reflect.Type
 	if _s.Value.Kind() != reflect.Slice {
 		typeName = _s.Value.Field(idxField).Type()
@@ -80,74 +98,114 @@ func (_s qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	}
 }
 
-func (_s qStruct) getIndexSQL() (sql string) {
+func (_s *qStruct) getIndexSQL() (sql string) {
 	if _s.hasIndex() {
-		where := ""
-		for _, _index := range _s.Index {
-			where += fmt.Sprintf(" `%s`.`%s` IN", _index.Table, _index.ColName)
-			in := ""
-			for i := 0; i < _s.Length; i++ {
-				in += fmt.Sprintf(" %#v,", _s.getValueInterface(_index.ValIdx, i))
+		var where strings.Builder
+		for _idx, _index := range _s.Index {
+			if _idx != 0 {
+				where.WriteString(" AND ")
 			}
 
-			where += fmt.Sprintf("(%s) AND", in[1:len(in)-1])
+			where.WriteString(fmt.Sprintf("`%s`.`%s` IN ", _index.Table, _index.ColName))
+			var in = make([]string, _s.Length)
+			for i := 0; i < _s.Length; i++ {
+				in[i] = "?" // fmt.Sprintf("%#v", _s.getValueInterface(_index.ValIdx, i))
+				_s.Values = append(_s.Values, _s.getValueInterface(_index.ValIdx, i))
+			}
+
+			where.WriteString(fmt.Sprintf("(%s)", strings.Join(in, ", ")))
 		}
-		return where[1 : len(where)-4]
+
+		return where.String()
 	}
+
 	return ""
 }
 
-func (_s qStruct) hasJoins() bool {
+func (_s *qStruct) hasJoins() bool {
 	return len(_s.Joins) != 0
 }
 
-func (_s qStruct) hasWheres() bool {
+func (_s *qStruct) hasWheres() bool {
 	return len(_s.Wheres) != 0
 }
 
-func (_s qStruct) composeInsertSQL() (sql string) {
+// If qStruct.Length > 1, make sure each element has the same columns to insert!
+func (_s *qStruct) composeInsertSQL() string {
 	var (
-		colVal map[string][]string
+		sql    strings.Builder
+		colVal = make(map[string]*columnValue)
 		key    string
 		col    []string
 		val    []string
+		cV     *columnValue
 	)
+	_s.Values = make([]interface{}, 0)
 	for i := 0; i < _s.Length; i++ {
-		colVal = make(map[string][]string)
 		for _, _field := range _s.Fields {
-			// will ignore `TABLE`. prefix
+			// ignore `TABLE`. prefix
 			if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
 				key = fmt.Sprintf("`%s`", _field.ColName)
 				if colVal[key] == nil {
-					colVal[key] = make([]string, 0)
-				}
-				if _field.Json != "" {
-					colVal[key] = append(colVal[key], fmt.Sprintf("'%s', %#v", _field.Json, _s.getValueInterface(_field.ValIdx, i)))
+					cV = _s.AllocColumnValue()
+					cV.Stmt = make([]string, 0)
+					cV.Val = make([]interface{}, 0)
 				} else {
-					colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _s.getValueInterface(_field.ValIdx, i)))
+					cV = colVal[key]
 				}
+
+				if _field.Json != "" {
+					cV.Type = "json"
+					cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', ?", _field.Json))
+					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
+				} else {
+					cV.Stmt = append(cV.Stmt, "?")
+					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
+				}
+				colVal[key] = cV
 			}
 		}
-		col = make([]string, 0, len(colVal))
+
 		val = make([]string, 0, len(colVal))
-
-		for _key, _val := range colVal {
-			col = append(col, _key)
-			if len(_val) > 1 {
-				val = append(val, fmt.Sprintf("JSON_OBJECT(%s)", strings.Join(_val, ", ")))
-			} else {
-				val = append(val, strings.Join(_val, ", "))
+		if i == 0 {
+			col = make([]string, 0, len(colVal))
+			for _key, _val := range colVal {
+				col = append(col, _key)
+				if _val.Type == "json" {
+					val = append(val, fmt.Sprintf("JSON_OBJECT(%s)", strings.Join(_val.Stmt, ", ")))
+				} else {
+					val = append(val, _val.Stmt[0])
+				}
+				_s.Values = append(_s.Values, _val.Val...)
+				colVal[_key].Free()
+				colVal[_key] = nil
+				delete(colVal, _key)
 			}
+			sql.WriteString(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES", _s.Table, strings.Join(col, ", ")))
+		} else {
+			for _, _key := range col {
+				if colVal[_key].Type == "json" {
+					val = append(val, fmt.Sprintf("JSON_OBJECT(%s)", strings.Join(colVal[_key].Stmt, ", ")))
+				} else {
+					val = append(val, colVal[_key].Stmt[0])
+				}
+				_s.Values = append(_s.Values, colVal[_key].Val...)
+				colVal[_key].Free()
+				colVal[_key] = nil
+				delete(colVal, _key)
+			}
+			sql.WriteByte(',')
 		}
 
-		sql = fmt.Sprintf("%sINSERT INTO `%s` (%s) VALUES (%s);", sql, _s.Table, strings.Join(col, ", "), strings.Join(val, ", "))
+		sql.WriteString(fmt.Sprintf(" (%s)", strings.Join(val, ",")))
 	}
 
-	return sql
+	return sql.String()
 }
 
-func (_s qStruct) composeBatchInsertSQL() (sql string) {
+func (_s *qStruct) composeBatchInsertSQL() string {
 	var (
+		sql  strings.Builder
 		col  string
 		val  string
 		vals string
@@ -156,7 +214,6 @@ func (_s qStruct) composeBatchInsertSQL() (sql string) {
 
 	for _idx, _values := range _s.BatchValue {
 		val = ""
-		// TODO: sort with sort.Strings
 
 		if _idx == 0 {
 			for _key := range _values {
@@ -173,7 +230,7 @@ func (_s qStruct) composeBatchInsertSQL() (sql string) {
 		val = val[1 : len(val)-1]
 		vals += "(" + val + "), "
 	}
-	sql = fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s;", _s.Table, col[1:len(col)-1], vals[:len(vals)-2])
+	sql.WriteString(fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", _s.Table, col[1:len(col)-1], vals[:len(vals)-2]))
 
 	if _s.OnDuplicateKeyUpdate {
 		val = ""
@@ -181,174 +238,292 @@ func (_s qStruct) composeBatchInsertSQL() (sql string) {
 			val += fmt.Sprintf(" `%s` = %s,", _col, _val)
 		}
 		val = val[1 : len(val)-1]
-		sql = fmt.Sprintf("%s ON DUPLICATE KEY UPDATE %s", sql[0:len(sql)-1], val)
+		sql.WriteString(fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s", val))
 	}
+	sql.WriteByte(';')
 
-	return sql
+	return sql.String()
 }
 
-func (_s qStruct) composeSelectFieldSQL() (sql string) {
+func (_s *qStruct) composeSelectFieldSQL() string {
 	var (
+		sql    strings.Builder
 		fields = make([]string, 0, len(_s.Fields))
 	)
 	for _, _field := range _s.Fields {
 		fields = append(fields, _field.SelectString())
 	}
 
-	return strings.Join(fields, ", ")
+	sql.WriteString(strings.Join(fields, ", "))
+
+	return sql.String()
 }
 
-func (_s qStruct) composeSelectSQL(filterType string, filters []string) (sql string) {
-	condition := ""
-	sql = fmt.Sprintf("SELECT %s", _s.composeSelectFieldSQL())
-
-	if _s.Table != "" {
-		sql = fmt.Sprintf("%s FROM `%s`", sql, _s.Table)
-	}
-
-	if _s.hasJoins() {
-		sql = fmt.Sprintf("%s %s",
-			sql,
-			strings.Join(_s.Joins, " "))
-	}
-
-	if _s.hasWheres() {
-		condition += fmt.Sprintf(" (%s) AND",
-			strings.Join(_s.Wheres, " AND "))
-	}
-	if len(filters) != 0 {
-		condition += fmt.Sprintf(" (%s) AND",
-			strings.Join(filters, filterType))
-	}
-	if _s.hasIndex() {
-		condition += fmt.Sprintf(" (%s) AND",
-			_s.getIndexSQL())
-	}
-
-	_len := len(condition)
-	if _len > 0 {
-		sql += fmt.Sprintf(" WHERE%s", condition[:_len-4])
-	}
-
-	return sql
-}
-
-func (_s qStruct) composeCountSQL(filterType string, filters []string) (sql string) {
-	condition := ""
-	sql = fmt.Sprintf("SELECT COUNT(1) FROM `%s`",
-		_s.Table)
-
-	if _s.hasJoins() {
-		sql = fmt.Sprintf("%s %s",
-			sql,
-			strings.Join(_s.Joins, " "))
-	}
-
-	if _s.hasWheres() {
-		condition += fmt.Sprintf(" (%s) AND",
-			strings.Join(_s.Wheres, " AND "))
-	}
-	if len(filters) != 0 {
-		condition += fmt.Sprintf(" (%s) AND",
-			strings.Join(filters, filterType))
-	}
-	if _s.hasIndex() {
-		condition += fmt.Sprintf(" (%s) AND",
-			_s.getIndexSQL())
-	}
-
-	_len := len(condition)
-	if _len > 0 {
-		sql += fmt.Sprintf(" WHERE%s", condition[:_len-4])
-	}
-
-	return sql
-}
-
-// UPDATE TAB SET <>=<> WHERE Idx;
-// TODO: Support joint table update!
-func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit int) (sql string) {
+func (_s *qStruct) composeSelectSQL(filters []qClause) string {
 	var (
-		updates      []string
-		update       string
-		colVal       map[string][]string
-		key          string
-		condition    string
-		hasCondition bool
-		hasLimit     = limit != 0
+		sql strings.Builder
 	)
 
-	for i := 0; i < _s.Length; i++ {
-		update = ""
-		condition = ""
-		hasCondition = false
-		colVal = make(map[string][]string)
+	_s.Values = make([]interface{}, 0)
+
+	sql.WriteString(fmt.Sprintf("SELECT %s", _s.composeSelectFieldSQL()))
+
+	if _s.Table != "" {
+		sql.WriteString(fmt.Sprintf(" FROM `%s`", _s.Table))
+	}
+
+	if _s.hasJoins() {
+		sql.WriteString(fmt.Sprintf(" %s", strings.Join(_s.Joins, " ")))
+	}
+
+	condition := _s.composeWhereIndexCondition(filters)
+	if len(condition) > 0 {
+		sql.WriteString(fmt.Sprintf(" WHERE %s", condition))
+	}
+
+	return sql.String()
+}
+
+func (_s *qStruct) composeCountSQL(filters []qClause) string {
+	var (
+		sql strings.Builder
+	)
+	sql.WriteString(fmt.Sprintf("SELECT COUNT(1) FROM `%s`", _s.Table))
+
+	if _s.hasJoins() {
+		sql.WriteString(fmt.Sprintf(" %s", strings.Join(_s.Joins, " ")))
+	}
+
+	condition := _s.composeWhereIndexCondition(filters)
+	if condition != "" {
+		sql.WriteString(fmt.Sprintf(" WHERE %s", condition))
+	}
+
+	return sql.String()
+}
+
+func (s *qStruct) composeWhereIndexCondition(filters []qClause) string {
+	var (
+		condition = make([]string, 0, 3)
+	)
+
+	if s.hasWheres() {
+		condition = append(condition, fmt.Sprintf("(%s)", strings.Join(s.Wheres, " AND ")))
+	}
+	if len(filters) != 0 {
+		var sqlFilter strings.Builder
+		sqlFilter.WriteByte('(')
+		for _idx, _filter := range filters {
+			if _idx != 0 {
+				sqlFilter.WriteString(fmt.Sprintf(" %s ", _filter.Operator))
+			}
+			sqlFilter.WriteString(_filter.Template)
+			s.Values = append(s.Values, _filter.Values...)
+		}
+		sqlFilter.WriteByte(')')
+		condition = append(condition, sqlFilter.String())
+	}
+	if s.hasIndex() {
+		condition = append(condition, fmt.Sprintf("(%s)", s.getIndexSQL()))
+	}
+
+	return strings.Join(condition, " AND ")
+}
+
+// IMPORTANT: Only using index, pk to update!
+// UPDATE table SET Col1 = CASE pk
+// 												WHEN 1 THEN ...
+// 												WHEN 2 THEN ...
+// 												ELSE Col1
+// 												END,
+// 									...
+// 									WHERE pk IN (1, 2, 3);
+func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
+	var (
+		sql       strings.Builder
+		updates   []string
+		update    strings.Builder
+		key       string
+		condition []string
+		hasLimit  = limit != 0
+	)
+	_s.Values = make([]interface{}, 0)
+	// for i := 0; i < _s.Length; i++ {
+	if _s.Length == 1 {
+		var (
+			colVal = make(columnMapValue)
+			cV     *columnValue
+		)
 		for _, _field := range _s.Fields {
 			if _field.IsIndex == false && _field.Table == _s.Table {
 				key = fmt.Sprintf("`%s`", _field.ColName)
 				if colVal[key] == nil {
-					colVal[key] = make([]string, 0)
+					cV = _s.AllocColumnValue()
+					cV.Stmt = make([]string, 0)
+				} else {
+					cV = colVal[key]
 				}
-				if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
+
+				if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) {
 					if _field.Json != "" {
-						colVal[key] = append(colVal[key], fmt.Sprintf("%s', %#v", _field.Json, _s.getValueInterface(_field.ValIdx, i)))
+						cV.Type = "json"
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
 					} else {
-						colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _s.getValueInterface(_field.ValIdx, i)))
+						cV.Stmt = append(cV.Stmt, "?")
 					}
-					// update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _s.getValueInterface(_field.ValIdx, i))
-				} else if _field.Alt != nil && !isEqual(_field.AsNull, _field.Alt) {
-					// if AsNull == Alt, ignore!
-					if _field.Json != "" {
-						colVal[key] = append(colVal[key], fmt.Sprintf("'$.%s', %#v", _field.Json, _field.Alt))
-					} else {
-						colVal[key] = append(colVal[key], fmt.Sprintf("%#v", _field.Alt))
-					}
-					// update += fmt.Sprintf(" `%s`=%#v,", _field.ColName, _field.Alt)
+					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
+					// } else if _field.Alt != nil && !isEqual(_field.AsNull, _field.Alt) {
+					//   // if AsNull == Alt, ignore!
+					//   if _field.Json != "" {
+					//     cV.Type = "json"
+					//     cV.Stmt = append(cV.Stmt, fmt.Sprintf("'$.%s', %#v", _field.Json, _field.Alt))
+					//   } else {
+					//     cV.Stmt = append(cV.Stmt, fmt.Sprintf("%#v", _field.Alt))
+					//   }
+				} else if _field.Self != "" {
+					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
 				}
+				colVal[key] = cV
 			}
 		}
+
 		updates = make([]string, 0, len(colVal))
 
 		for _key, _val := range colVal {
-			if len(_val) > 0 {
-				update = fmt.Sprintf("%s=", _key)
-				if len(_val) > 1 {
-					update += fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _key, _key, strings.Join(_val, ", '$."), strings.Join(_val, ", '"))
+			update.Reset()
+			if len(_val.Stmt) > 0 {
+				update.WriteString(fmt.Sprintf("%s=", _key))
+				if _val.Type == "json" {
+					update.WriteString(fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _key, _key, strings.Join(_val.Stmt, ", '$."), strings.Join(_val.Stmt, ", '")))
+					_s.Values = append(_s.Values, _val.Val...)
 				} else {
-					update += _val[0]
+					update.WriteString(_val.Stmt[0])
 				}
-				updates = append(updates, update)
+				_s.Values = append(_s.Values, _val.Val...)
+				updates = append(updates, update.String())
 			}
+			colVal[_key].Free()
+			colVal[_key] = nil
+			delete(colVal, _key)
 		}
 
 		if _s.hasIndex() {
-			hasCondition = true
+			indexes := make([]string, 0)
 			for _, _index := range _s.Index {
-				condition += fmt.Sprintf(" `%s`=%#v AND", _index.ColName, _s.getValueInterface(_index.ValIdx, i))
+				indexes = append(indexes, fmt.Sprintf("`%s`=?", _index.ColName))
+				_s.Values = append(_s.Values, _s.getValueInterface(_index.ValIdx, 0))
 			}
+			condition = append(condition, fmt.Sprintf("(%s)", strings.Join(indexes, " AND ")))
 		}
 
 		if _s.hasWheres() {
-			hasCondition = true
-			condition += fmt.Sprintf(" (%s) AND", strings.Join(_s.Wheres, " AND "))
+			condition = append(condition, fmt.Sprintf("(%s)", strings.Join(_s.Wheres, " AND ")))
 		}
 
 		if len(filters) != 0 {
-			hasCondition = true
-			condition += fmt.Sprintf(" (%s) AND", strings.Join(filters, filterType))
+			var sqlFilter strings.Builder
+			sqlFilter.WriteByte('(')
+			for _idx, _filter := range filters {
+				if _idx != 0 {
+					sqlFilter.WriteString(fmt.Sprintf(" %s ", _filter.Operator))
+				}
+				sqlFilter.WriteString(_filter.Template)
+				_s.Values = append(_s.Values, _filter.Values...)
+			}
+			sqlFilter.WriteByte(')')
+			condition = append(condition, sqlFilter.String())
 		}
 
-		if hasCondition {
-			sql = fmt.Sprintf("%sUPDATE `%s` SET%s WHERE%s;", sql, _s.Table, strings.Join(updates, ", "), condition[:len(condition)-4])
+		if len(condition) > 0 {
+			sql.WriteString(fmt.Sprintf("UPDATE `%s` SET%s WHERE %s", _s.Table, strings.Join(updates, ", "), strings.Join(condition, " AND ")))
 			if hasLimit {
-				sql = fmt.Sprintf("%s LIMIT %#v;", sql[:len(sql)-1], limit)
+				sql.WriteString(fmt.Sprintf(" LIMIT %#v", limit))
 			}
 		} else if hasLimit {
-			sql = fmt.Sprintf("%sUPDATE `%s` SET%s LIMIT %#v;", sql, _s.Table, strings.Join(updates, ", "), limit)
+			sql.WriteString(fmt.Sprintf("UPDATE `%s` SET%s LIMIT %#v", _s.Table, strings.Join(updates, ", "), limit))
 		}
+	} else {
+		// primary key is required!
+		if !_s.hasIndex() {
+			panic(errors.New("dataq: multiple row update must have to specify primary key"))
+		}
+		// the first index as primary key
+		var (
+			_PK    = fmt.Sprintf("`%s`", _s.Index[0].ColName)
+			ids    = make([]string, 0)
+			colVal = make(columnMapPkValues)
+			cV     *columnValue
+		)
+		for i := 0; i < _s.Length; i++ {
+			var _PkVal = _s.getValueInterface(_s.Index[0].ValIdx, i)
+			ids = append(ids, fmt.Sprintf("%#v", _PkVal))
+			for _, _field := range _s.Fields {
+				if _field.IsIndex == false && _field.Table == _s.Table {
+					key = fmt.Sprintf("`%s`", _field.ColName)
+					if colVal[key] == nil {
+						colVal[key] = make(map[interface{}]*columnValue)
+					}
+					if colVal[key][_PkVal] == nil {
+						cV = _s.AllocColumnValue()
+						cV.Stmt = make([]string, 0)
+					} else {
+						cV = colVal[key][_PkVal]
+					}
+
+					cV.Pk = _PkVal
+					if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
+						if _field.Json != "" {
+							cV.Type = "json"
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
+						} else {
+							cV.Stmt = append(cV.Stmt, "?")
+						}
+						cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
+					} else if _field.Self != "" {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
+					}
+					colVal[key][_PkVal] = cV
+				}
+			}
+		}
+
+		sql.WriteString(fmt.Sprintf("UPDATE `%s` SET ", _s.Table))
+		updates = make([]string, 0, len(colVal))
+		var hasStmt = false
+
+		for _column, _pks := range colVal {
+			update.Reset()
+			hasStmt = false
+			if len(_pks) > 0 {
+				update.WriteString(fmt.Sprintf("%s=CASE %s", _column, _PK))
+				for _pk, _val := range _pks {
+					if len(_val.Stmt) > 0 {
+						hasStmt = true
+						update.WriteString(" WHEN ? THEN ")
+						_s.Values = append(_s.Values, _pk)
+						if _val.Type == "json" {
+							update.WriteString(fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _column, _column, strings.Join(_val.Stmt, ", '%."), strings.Join(_val.Stmt, ",'")))
+							_s.Values = append(_s.Values, _val.Val...)
+						} else {
+							update.WriteString(_val.Stmt[0])
+						}
+						_s.Values = append(_s.Values, _val.Val...)
+					}
+					_pks[_pk].Free()
+					_pks[_pk] = nil
+					delete(_pks, _pk)
+				}
+			}
+			if hasStmt {
+				update.WriteString(fmt.Sprintf(" ELSE %s END", _column))
+				updates = append(updates, update.String())
+			}
+			delete(colVal, _column)
+		}
+		sql.WriteString(fmt.Sprintf("%s WHERE %s IN (%s)", strings.Join(updates, ","), _PK, strings.Join(ids, ",")))
 	}
 
-	return sql
+	return sql.String()
 }
 
 // UPDATE categories
@@ -363,8 +538,9 @@ func (_s qStruct) composeUpdateSQL(filterType string, filters []string, limit in
 //	WHEN 3 THEN 'New Title 3'
 //	END
 //	WHERE id IN (1,2,3)
-func (_s qStruct) composeBatchUpdateSQL() (sql string) {
+func (_s *qStruct) composeBatchUpdateSQL() string {
 	var (
+		sql           strings.Builder
 		lenBatchValue = len(_s.BatchValue) - 1
 		lenBatchField = len(_s.BatchValue[0]) - 1
 		fieldName     = make([]string, lenBatchField)
@@ -401,13 +577,14 @@ func (_s qStruct) composeBatchUpdateSQL() (sql string) {
 		condition += _condition + ", "
 	}
 
-	sql = fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` IN (%s);", _s.Table, update, indexName, condition[:len(condition)-2])
+	sql.WriteString(fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` IN (%s);", _s.Table, update, indexName, condition[:len(condition)-2]))
 
-	return sql
+	return sql.String()
 }
 
-func (_s qStruct) composeCreateTableSQL() (sql string) {
+func (_s *qStruct) composeCreateTableSQL() string {
 	var (
+		sql    strings.Builder
 		fields = make([]string, len(_s.Fields))
 	)
 
@@ -417,11 +594,34 @@ func (_s qStruct) composeCreateTableSQL() (sql string) {
 
 	fieldsDef := strings.Join(fields, ", ")
 	indexDef := strings.Join(_s.Schema, ", ")
-	if indexDef != "" {
-		indexDef = ", " + indexDef
-	}
 
-	sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;", _s.Table, fieldsDef, indexDef)
+	sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;", _s.Table, fieldsDef, indexDef))
 
-	return
+	return sql.String()
+}
+
+func (s *qStruct) GetValues() []interface{} {
+	return s.Values
+}
+
+func (_s *qStruct) String() string {
+	return fmt.Sprintf("Query Struct: {\nTable:\t\t%v\nLength:\t\t%v\nIndex:\t\t%v\nFields:\t\t%v\n\tJoins:\t%v\n\tWheres:\t%v\n\tQueryOnly:\t%v\n\tBatchValue:\t%v\nSchema:\t%v\nOnDuplicateKeyUpdate: %v\nDuplicateKeyUpdateCol: %v\n}\n", _s.Table, _s.Length, _s.Index, _s.Fields, _s.Joins, _s.Wheres, _s.QueryOnly, _s.BatchValue, _s.Schema, _s.OnDuplicateKeyUpdate, _s.DuplicateKeyUpdateCol)
+}
+
+func (c qClause) String() string {
+	return fmt.Sprintf("\tQuery Clause: {\n\t\tOperator:\t%v\n\t\tTemplate:\t%v\n\t\tValues:\t%v\n\t}\n", c.Operator, c.Template, c.Values)
+}
+
+func ClearValue(v interface{}) {
+	p := reflect.ValueOf(v).Elem()
+	p.Set(reflect.Zero(p.Type()))
+}
+
+func (_s *qStruct) AllocColumnValue() *columnValue {
+	return columnValuePool.Get().(*columnValue)
+}
+
+func (x *columnValue) Free() {
+	ClearValue(x)
+	columnValuePool.Put(x)
 }

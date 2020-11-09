@@ -1,6 +1,9 @@
 package dataq
 
-import "database/sql"
+import (
+	"database/sql"
+	"time"
+)
 
 // QInterface Interface
 type QInterface interface {
@@ -10,4 +13,7 @@ type QInterface interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 	Stats() sql.DBStats
 	Begin() (*sql.Tx, error)
+	SetMaxOpenConns(n int)
+	SetMaxIdleConns(n int)
+	SetConnMaxLifetime(d time.Duration)
 }

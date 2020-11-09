@@ -2,8 +2,10 @@ package dataq
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -120,10 +122,22 @@ type Person struct {
 	Omit    string    `OMIT:""`
 }
 
+type Person1 struct {
+	ID   int64  `INDEX:"" COL:"ID" TABLE:"Person"`
+	Name string `COL:"NAME" ALT:""`
+	Age  int    `COL:"AGE"`
+}
+
+type Person2 struct {
+	ID   int64  `INDEX:"" COL:"ID" TABLE:"Person"`
+	Name string `COL:"NAME" ALT:""`
+	Age  int    `COL:"AGE"`
+}
+
 type PersonJson struct {
 	ID       int64     `INDEX:"" COL:"ID" TABLE:"Person"`
 	Name     string    `COL:"NAME" ALT:""`
-	Age      int       `COL:"AGE"`
+	Age      int       `COL:"AGE" SELF:"+1"`
 	Password string    `JSON:"PROFILE.password" json:"password"`
 	Username string    `JSON:"PROFILE.userName" json:"username"`
 	Created  time.Time `COL:"CREATED"`
@@ -155,32 +169,46 @@ type PersonInfo struct {
 	Comment string `COL:"CMT"`
 }
 
-func TestComposeInsertSQL(t *testing.T) {
+func TestComposeSQL(t *testing.T) {
 	p := PersonJson{
 		ID:       3,
 		Name:     "CC",
-		Age:      12,
 		Password: "password123123123",
 		Username: "username123123123",
 	}
 	stuP, _ := analyseStruct(p)
-	t.Error(stuP.composeInsertSQL())
-	t.Error(stuP.composeUpdateSQL("", nil, 0))
-	t.Error(stuP.composeSelectSQL(" OR ", nil))
-	pp := []Person{
+	insertSql := stuP.composeInsertSQL()
+	t.Error(insertSql)
+	t.Errorf("Values: %#v", stuP.GetValues())
+	updateSql := stuP.composeUpdateSQL([]qClause{{"AND", "`NAME`=?", []interface{}{"123"}}, {"OR", "`AGE`=?", []interface{}{1}}}, 0)
+	t.Error(updateSql)
+	t.Errorf("Values: %#v", stuP.GetValues())
+	selectSql := stuP.composeSelectSQL(nil)
+	t.Error(selectSql)
+	t.Errorf("Values: %#v", stuP.GetValues())
+	pp := []PersonJson{
 		{
-			Name: "",
-			Age:  4,
+			ID:       1,
+			Name:     "",
+			Age:      4,
+			Password: "password123123123",
 		}, {
-			Name:    "BB",
-			Age:     3,
-			Profile: "{}",
+			ID:       2,
+			Name:     "BB",
+			Age:      3,
+			Password: "password123123123",
 		},
 	}
 	strPp, _ := analyseStruct(&pp)
-	t.Error(strPp.composeSelectSQL(" AND ", nil))
-	t.Error(strPp.composeInsertSQL())
-	t.Error(strPp.composeUpdateSQL("", nil, 0))
+	mInsertSql := strPp.composeInsertSQL()
+	t.Error(mInsertSql)
+	t.Errorf("Values: %#v", strPp.GetValues())
+	mUpdateSql := strPp.composeUpdateSQL([]qClause{{"AND", "`NAME`=?", []interface{}{"123"}}}, 0)
+	t.Error(mUpdateSql)
+	t.Errorf("Values: %#v", strPp.GetValues())
+	mSelectSql := strPp.composeSelectSQL(nil)
+	t.Error(mSelectSql)
+	t.Errorf("Values: %#v", strPp.GetValues())
 }
 
 func TestBatchInsertSQL(t *testing.T) {
@@ -275,6 +303,92 @@ func TestBatchUpdate(t *testing.T) {
 	model.AppendBatchValue(v2)
 	t.Error(model.BatchUpdate())
 }
+
+// Note: From general_log shows that each routine will start a new connection with MySQL
+// but only the first connection will run SELECT DATABASE().
+func TestMultiTransactionWithPreparedStmt(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			tx := db.Begin()
+			defer func() {
+				if i%2 != 0 {
+					tx.Commit()
+					t.Errorf("%d Committed", i)
+				} else {
+					tx.Rollback()
+					t.Errorf("%d Rollback", i)
+				}
+				wg.Done()
+			}()
+			p := Person{
+
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			p1 := Person1{
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			p2 := Person2{
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			t.Error(tx.Model(p).PrepareNext(true).Insert())
+			t.Error(tx.Model(p1).PrepareNext(true).Insert())
+			t.Error(tx.Model(p2).PrepareNext(true).Insert())
+			t.Error(tx.Model(p).PrepareNext(true).Insert())
+			t.Error(tx.Model(p1).PrepareNext(true).Insert())
+			t.Error(tx.Model(p2).PrepareNext(true).Insert())
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestMultiInsert(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer func() {
+				t.Error(i)
+				wg.Done()
+			}()
+
+			p := Person{
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			p1 := Person1{
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			p2 := Person2{
+				Name: fmt.Sprintf("No %d", i),
+				Age:  i + 10,
+			}
+			db.Model(p).Insert()
+			db.Model(p1).Insert()
+			db.Model(p2).Insert()
+			db.Model(p).Insert()
+			db.Model(p1).Insert()
+			db.Model(p2).Insert()
+		}(i)
+	}
+
+	wg.Wait()
+}
+
 func TestColFunc(t *testing.T) {
 	db, err := Open(getDSN(t), 2)
 	checkErr(err, t)
@@ -289,7 +403,7 @@ func TestColFunc(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
-	db, err := Open(getDSN(t), 2)
+	db, err := Open(getDSN(t), 3)
 	checkErr(err, t)
 	defer db.Close()
 
@@ -310,8 +424,7 @@ func TestInsert(t *testing.T) {
 	// 	Age:  4,
 	// }
 
-	model := db.Model(&per).Begin()
-	defer model.Commit()
+	model := db.Model(&per)
 
 	t.Error(model.Insert())
 }
@@ -323,9 +436,18 @@ func checkErr(err error, t *testing.T) {
 }
 
 func TestTimeTime(t *testing.T) {
-	var a time.Time
+	type testTime struct {
+		CreatedAt time.Time `json:"createdAt"`
+	}
+	// using Date.prototype.toISOString() to get
+	var str = []byte(`{"createdAt":"2020-10-15T17:53:57.887Z"}`)
+	var a testTime
+	err := json.Unmarshal(str, &a)
+	if err != nil {
+		t.Fatal(err)
+	}
 	av := reflect.ValueOf(a)
-	t.Errorf("%#v", av.Interface().(time.Time).Format(time.RFC3339))
+	t.Errorf("%#v", av.Field(0).Interface().(time.Time).Format(DateTimeFormat))
 }
 
 func TestRawSQL(t *testing.T) {
@@ -334,19 +456,14 @@ func TestRawSQL(t *testing.T) {
 
 	tx, err := db.Begin()
 	checkErr(err, t)
-	defer tx.Rollback()
-
-	result, err := tx.Exec("INSERT INTO `Person` (`ID`, `NAME`, `AGE`, `PROFILE`) VALUES (0, \"AA\", 4, \"\")")
-	fmt.Println("result:", result)
-	// t.Error("Should have a panic")
-	// checkErr(err, t)
-
+	defer tx.Commit()
 	// t.Error(result.RowsAffected())
 
-	stmt, err := tx.Prepare("INSERT INTO `Person` (`ID`, `NAME`, `AGE`) VALUES (?, ?, ?)")
-	// checkErr(err, t)
+	stmt, err := tx.Prepare("INSERT INTO `Person` (`ID`, `NAME`, `AGE`) VALUES (?, ?, ?),(?, ?, ?);")
+	checkErr(err, t)
 
-	res, err := tx.Stmt(stmt).Exec(0, "TX with prepare", 5)
+	var vals = []interface{}{13, "Tx with prepare", 5, 14, "TxOK", 6}
+	res, err := tx.Stmt(stmt).Exec(vals...)
 	// checkErr(err, t)
 	id, err := res.LastInsertId()
 	// checkErr(err, t)
@@ -384,26 +501,25 @@ func TestCreateTable(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	db, err := Open(getDSN(t), 2)
+	db, err := Open(getDSN(t), 3)
 	checkErr(err, t)
 	defer db.Close()
 
 	per1 := []Person{
 		{
-			ID:  2,
+			ID:  11,
 			Age: 6,
 		},
 		{
-			ID:  4,
+			ID:  12,
 			Age: 8,
 		},
 	}
 	m := db.Model(per1)
-	// t.Errorf("%#v\n", m.Update())
+	t.Errorf("%#v\n", m.Update())
 	res := m.Query()
 	t.Errorf("%#v\n", res.Error)
 	t.Errorf("%#v\n", per1)
-	t.Errorf("%v\n", per1)
 }
 
 func TestQuery(t *testing.T) {

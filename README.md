@@ -1,7 +1,7 @@
-# dataq(uelle)
-> A light-weight SQL builder for Go
+# dataq(uelle) for MySQL
+> A light-weight SQL builder of MySQL for Go
 
-[![Telegram](https://img.shields.io/badge/chat-telegram-blue.svg)](https://t.me/helloblackboard)
+[![Telegram](https://img.shields.io/badge/chat-telegram-blue.svg)](https://t.me/ssvjrmnidhpg)
 
 ## Features
 
@@ -54,7 +54,8 @@
 
 ### Attention
 
-* 
+* `WHERE <ID> IN (,,,,)` will be replaced to `WHERE <ID> IN (?,?,?,?,?)`
+
 ### Tags
 
 * `TABLE` - The table name.
@@ -70,3 +71,4 @@
 * `SCHEMAF` - [CreateTable only!] the define string for the field.
 * `SCHEMAT` - [CreateTable only!] the define string for the table.
 	* 问题：无法使用````符号了！解决：可以用
+* `SELF` - `<Field>=<Field><SELF>` (not for JOSN datatype)

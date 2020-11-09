@@ -7,25 +7,24 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // QStat ...
 // Support multiple value states
 type QStat struct {
-	dbc         *DConn
-	Method      qMethod
-	Tx          *sql.Tx
-	err         error
-	sqlStruct   qStruct
-	Filters     []string
-	GroupS      string
-	HavingS     string
-	OrderS      string
-	RowLimit    int
-	BeginOffset int
-	ValCondType string
-	BatchMode   bool
+	dbc          *QData
+	preparedStmt bool
+	Method       qMethod
+	sqlStruct    qStruct
+	Filters      []qClause
+	GroupS       string
+	HavingS      string
+	OrderS       string
+	RowLimit     int
+	BeginOffset  int
+	BatchMode    bool
 }
 
 // qMethod is the basic method type
@@ -40,8 +39,14 @@ const sqlBatchInsert qMethod = 5
 const sqlBatchUpdate qMethod = 6
 const sqlCreateTable qMethod = 100
 
-func (stat QStat) String() string {
-	return fmt.Sprintf("Query Statement {\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
+func (stat *QStat) String() string {
+	return fmt.Sprintf("Query Statement {\n\tMethod:\t%v\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.Method, stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
+}
+
+func (stat *QStat) PrepareNext(it bool) *QStat {
+	stat.preparedStmt = it
+
+	return stat
 }
 
 // Table which table?
@@ -53,8 +58,10 @@ func (stat *QStat) Table(table string) *QStat {
 
 // IndexWith sets the i-th (start from 0) Field as Index
 func (stat *QStat) IndexWith(i int) *QStat {
-	stat.sqlStruct.Fields[i].IsIndex = true
-	stat.sqlStruct.Index = append(stat.sqlStruct.Index, stat.sqlStruct.Fields[i])
+	if !stat.sqlStruct.Fields[i].IsIndex {
+		stat.sqlStruct.Fields[i].IsIndex = true
+		stat.sqlStruct.Index = append(stat.sqlStruct.Index, stat.sqlStruct.Fields[i])
+	}
 
 	return stat
 }
@@ -67,28 +74,27 @@ func (stat *QStat) Join(joins ...string) *QStat {
 }
 
 // Where ...
-func (stat *QStat) Where(wheres ...string) *QStat {
-	stat.Filters = append(stat.Filters, wheres...)
+func (stat *QStat) Where(operator, template string, vals ...interface{}) *QStat {
+	if strings.Contains(template, ",,,,") {
+		_values := make([]string, len(vals))
+		for _idx := range _values {
+			_values[_idx] = "?"
+		}
+		template = strings.Replace(template, ",,,,", strings.Join(_values, ","), 1)
+
+	}
+	stat.Filters = append(stat.Filters, qClause{
+		Operator: operator,
+		Template: template,
+		Values:   vals,
+	})
 
 	return stat
 }
 
 // ClearWhere ...
 func (stat *QStat) ClearWhere() *QStat {
-	stat.Filters = nil
-
-	return stat
-}
-
-// Disjunktion ...
-func (stat *QStat) Disjunktion() *QStat {
-	stat.ValCondType = " OR "
-	return stat
-}
-
-// Konjunktion ...
-func (stat *QStat) Konjunktion() *QStat {
-	stat.ValCondType = " AND "
+	stat.Filters = make([]qClause, 0)
 
 	return stat
 }
@@ -127,21 +133,9 @@ func (stat *QStat) Offset(offset int) *QStat {
 	return stat
 }
 
-// Begin a transaction
-func (stat *QStat) Begin() *QStat {
-	stat.Tx, stat.err = stat.dbc.db.Begin()
-
-	return stat
-}
-
-// Commit a transaction
-func (stat *QStat) Commit() error {
-	return stat.Tx.Commit()
-}
-
-// Rollback a transaction
-func (stat *QStat) Rollback() error {
-	return stat.Tx.Rollback()
+func (stat *QStat) Scope(fn func(*QStat) *QStat) *QStat {
+	ret := fn(stat)
+	return ret
 }
 
 func (stat *QStat) TableSchema(defs ...string) *QStat {
@@ -183,8 +177,8 @@ func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
 
 // SetModel will only analyse the model without query to database
 func (stat *QStat) SetModel(model interface{}) *QStat {
-	var err error
-	stat.sqlStruct, err = analyseStruct(model)
+	sqlStruct, err := analyseStruct(model)
+	stat.sqlStruct = sqlStruct
 	panicErrHandle(err)
 
 	if stat.dbc.debugLvl > 3 {
@@ -221,33 +215,48 @@ func (stat *QStat) Exec() *QResult {
 	case sqlUpdate:
 		if stat.sqlStruct.QueryOnly == true {
 			return &QResult{
-				Error: errors.New("dataq: Query only"),
+				Error: errors.New("dataq: query only"),
 			}
 		}
 
 		var (
 			rawResult sql.Result
-			err       error
 		)
-		if stat.Tx != nil {
-			rawResult, err = stat.Tx.Exec(_sql)
+
+		if stat.preparedStmt {
+			preparedStmt, err := stat.sqlPrepare(_sql)
+
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
+			}
+
+			rawResult, err = preparedStmt.Exec(stat.sqlStruct.Values...)
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
+			}
 		} else {
-			rawResult, err = stat.dbc.db.Exec(_sql)
-		}
-		if err != nil {
-			return &QResult{
-				Error: err,
+			var err error
+			rawResult, err = stat.sqlExec(_sql, stat.sqlStruct.Values...)
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
 			}
 		}
+
 		affectedRows, err := rawResult.RowsAffected()
 		if err != nil {
 			return &QResult{
 				Error: err,
 			}
 		}
-		if affectedRows < int64(stat.sqlStruct.Length) {
-			affectedRows = int64(stat.sqlStruct.Length)
-		}
+		// if affectedRows < int64(stat.sqlStruct.Length) {
+		//   affectedRows = int64(stat.sqlStruct.Length)
+		// }
 
 		lastInsertID, err := rawResult.LastInsertId()
 		if err != nil {
@@ -266,7 +275,7 @@ func (stat *QStat) Exec() *QResult {
 	case sqlSelect:
 		if stat.sqlStruct.Value.Kind() != reflect.Slice && !stat.sqlStruct.Value.CanSet() {
 			return &QResult{
-				Error: errors.New("dataq: This struct not settable, use new() to init an empty struct"),
+				Error: errors.New("dataq: This struct is not settable, use new() to init. an empty struct"),
 			}
 		}
 
@@ -274,28 +283,39 @@ func (stat *QStat) Exec() *QResult {
 			nField  = len(stat.sqlStruct.Fields)
 			tmpDS   []interface{}
 			rawRows *sql.Rows
-			err     error
 		)
-
-		if stat.sqlStruct.Value.Kind() == reflect.Slice {
-			stat.Limit(stat.sqlStruct.Value.Len())
-		} else {
-			stat.Limit(1)
-		}
 
 		tmpDS = make([]interface{}, nField)
 		values := make([]sql.RawBytes, nField)
 		for i := 0; i < nField; i++ {
 			tmpDS[i] = &values[i]
 		}
-		if stat.Tx != nil {
-			rawRows, err = stat.Tx.Query(_sql)
+
+		if stat.preparedStmt {
+			preparedStmt, err := stat.sqlPrepare(_sql)
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
+			}
+
+			if stat.dbc.debugLvl > 2 {
+				fmt.Printf("Values %#v\n", stat.sqlStruct.Values)
+			}
+
+			rawRows, err = preparedStmt.Query(stat.sqlStruct.Values...)
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
+			}
 		} else {
-			rawRows, err = stat.dbc.db.Query(_sql)
-		}
-		if err != nil {
-			return &QResult{
-				Error: err,
+			var err error
+			rawRows, err = stat.sqlQuery(_sql, stat.sqlStruct.Values...)
+			if err != nil {
+				return &QResult{
+					Error: err,
+				}
 			}
 		}
 		defer rawRows.Close()
@@ -334,7 +354,8 @@ func (stat *QStat) Exec() *QResult {
 				case reflect.Struct:
 					// TODO: not only parse Time
 					if _type := modField.Type(); _type.PkgPath() == "time" && _type.Name() == "Time" {
-						t, _ := time.Parse(DateTimeFormat, string(values[i]))
+						// Need timezone and can be parsed by Javascript
+						t, _ := time.Parse(time.RFC3339, string(values[i]))
 						modField.Set(reflect.ValueOf(t))
 					}
 				case reflect.Map:
@@ -358,11 +379,21 @@ func (stat *QStat) Exec() *QResult {
 		}
 	case sqlCount:
 		res := QResult{}
-		stat.dbc.db.QueryRow(_sql).Scan(&res.ReturnedRows)
+		if stat.preparedStmt {
+			preparedStmt, err := stat.sqlPrepare(_sql)
+			if err != nil {
+				res.Error = err
+				return &res
+			}
+
+			preparedStmt.QueryRow(stat.sqlStruct.Values...).Scan(&res.ReturnedRows)
+		} else {
+			stat.sqlQueryRow(_sql).Scan(&res.ReturnedRows)
+		}
 
 		return &res
 	case sqlCreateTable:
-		rawResult, err := stat.dbc.db.Exec(_sql)
+		rawResult, err := stat.sqlExec(_sql)
 		if err != nil {
 			return &QResult{
 				Error: err,
@@ -394,72 +425,80 @@ func (stat *QStat) Exec() *QResult {
 
 func (stat *QStat) composeSQL() string {
 	if stat.sqlStruct.Length == 0 {
-		panic(errors.New("dataq: qStat has no table name"))
+		panic(errors.New("dataq: table name is required"))
 	}
 	var (
-		sql string
+		sql strings.Builder
 	)
 
 	switch stat.Method {
 	case sqlInsert:
-		sql = stat.sqlStruct.composeInsertSQL()
+		sql.WriteString(stat.sqlStruct.composeInsertSQL())
 	case sqlBatchInsert:
-		sql = stat.sqlStruct.composeBatchInsertSQL()
+		sql.WriteString(stat.sqlStruct.composeBatchInsertSQL())
 	case sqlSelect:
-		sql = stat.sqlStruct.composeSelectSQL(stat.ValCondType, stat.Filters)
+		sql.WriteString(stat.sqlStruct.composeSelectSQL(stat.Filters))
 
 		if stat.GroupS != "" {
-			sql += fmt.Sprintf(" %v", stat.GroupS)
+			sql.WriteString(fmt.Sprintf(" %v", stat.GroupS))
 		}
 
 		if stat.HavingS != "" {
-			sql += fmt.Sprintf(" HAVING %v", stat.HavingS)
+			sql.WriteString(fmt.Sprintf(" HAVING %v", stat.HavingS))
 		}
 
 		if stat.OrderS != "" {
-			sql += fmt.Sprintf(" ORDER BY %v", stat.OrderS)
+			sql.WriteString(fmt.Sprintf(" ORDER BY %v", stat.OrderS))
 		}
 
 		if stat.sqlStruct.Length == 1 {
-			sql += " LIMIT 1"
+			sql.WriteString(" LIMIT 1")
 		} else if stat.RowLimit != 0 {
-			sql += fmt.Sprintf(" LIMIT %v", stat.RowLimit)
+			sql.WriteString(" LIMIT ?")
+			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.RowLimit)
+		} else {
+			sql.WriteString(" LIMIT ?")
+			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.sqlStruct.Length)
 		}
 
 		if stat.BeginOffset != 0 {
-			sql += fmt.Sprintf(" OFFSET %v", stat.BeginOffset)
+			sql.WriteString(" OFFSET ?")
+			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.BeginOffset)
 		}
 	case sqlCount:
-		sql = stat.sqlStruct.composeCountSQL(stat.ValCondType, stat.Filters)
+		sql.WriteString(stat.sqlStruct.composeCountSQL(stat.Filters))
 		hasGroupBy := false
 		if stat.GroupS != "" {
-			sql += fmt.Sprintf(" %v", stat.GroupS)
+			sql.WriteString(fmt.Sprintf(" %v", stat.GroupS))
 			hasGroupBy = true
 		}
 
 		if stat.HavingS != "" {
-			sql += fmt.Sprintf(" HAVING %v", stat.HavingS)
+			sql.WriteString(fmt.Sprintf(" HAVING %v", stat.HavingS))
 		}
 
 		if stat.OrderS != "" {
-			sql += fmt.Sprintf(" ORDER BY %v", stat.OrderS)
+			sql.WriteString(fmt.Sprintf(" ORDER BY %v", stat.OrderS))
 		}
 
 		if stat.BeginOffset != 0 {
-			sql += fmt.Sprintf(" OFFSET %v", stat.BeginOffset)
+			sql.WriteString(" OFFSET ?")
+			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.BeginOffset)
 		}
 		if hasGroupBy {
-			sql = fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql)
+			var sqltemp strings.Builder
+			sqltemp.WriteString(fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql.String()))
+			sql = sqltemp
 		}
 	case sqlUpdate:
-		sql = stat.sqlStruct.composeUpdateSQL(stat.ValCondType, stat.Filters, stat.RowLimit)
+		sql.WriteString(stat.sqlStruct.composeUpdateSQL(stat.Filters, stat.RowLimit))
 	case sqlBatchUpdate:
-		sql = stat.sqlStruct.composeBatchUpdateSQL()
+		sql.WriteString(stat.sqlStruct.composeBatchUpdateSQL())
 	case sqlCreateTable:
-		sql = stat.sqlStruct.composeCreateTableSQL()
+		sql.WriteString(stat.sqlStruct.composeCreateTableSQL())
 	}
 
-	return sql
+	return sql.String()
 }
 
 // Insert return *QResult
@@ -513,4 +552,80 @@ func (stat *QStat) CreateTable() *QResult {
 	stat.Method = sqlCreateTable
 
 	return stat.Exec()
+}
+
+func (stat *QStat) sqlExec(_sql string, args ...interface{}) (rawResult sql.Result, err error) {
+	if stat.dbc.tx != nil {
+		rawResult, err = stat.dbc.tx.Exec(_sql, args...)
+	} else {
+		rawResult, err = stat.dbc.db.Exec(_sql, args...)
+	}
+
+	return
+}
+
+func (stat *QStat) sqlQuery(_sql string, args ...interface{}) (rawRows *sql.Rows, err error) {
+	if stat.dbc.tx != nil {
+		rawRows, err = stat.dbc.tx.Query(_sql, args...)
+	} else {
+		rawRows, err = stat.dbc.db.Query(_sql, args...)
+	}
+
+	return
+}
+
+func (stat *QStat) sqlPrepare(_sql string) (preparedStmt *sql.Stmt, err error) {
+	if stat.dbc.preparedStmt != nil {
+		if stmt, ok := stat.dbc.preparedStmt.Load(_sql); ok {
+			preparedStmt = stmt.(*sql.Stmt)
+			return
+		}
+	}
+
+	stat.dbc.shared.mux.RLock()
+	if stmt, ok := stat.dbc.shared.preparedStmt[_sql]; ok {
+		stat.dbc.shared.mux.RUnlock()
+		if stat.dbc.tx != nil {
+			preparedStmt = stat.dbc.tx.Stmt(stmt)
+			stat.dbc.preparedStmt.Store(_sql, preparedStmt)
+		} else {
+			preparedStmt = stmt
+		}
+		return
+	}
+	stat.dbc.shared.mux.RUnlock()
+
+	stat.dbc.shared.mux.Lock()
+	if stmt, ok := stat.dbc.shared.preparedStmt[_sql]; ok {
+		stat.dbc.shared.mux.Unlock()
+		if stat.dbc.tx != nil {
+			preparedStmt = stat.dbc.tx.Stmt(stmt)
+		} else {
+			preparedStmt = stmt
+		}
+		return
+	}
+
+	preparedStmt, err = stat.dbc.db.Prepare(_sql)
+	if err == nil {
+		stat.dbc.shared.preparedStmt[_sql] = preparedStmt
+	}
+	stat.dbc.shared.mux.Unlock()
+
+	if err == nil && stat.dbc.tx != nil {
+		preparedStmt = stat.dbc.tx.Stmt(preparedStmt)
+		stat.dbc.preparedStmt.Store(_sql, preparedStmt)
+	}
+
+	return
+}
+
+func (stat *QStat) sqlQueryRow(_sql string) (row *sql.Row) {
+	if stat.dbc.tx != nil {
+		row = stat.dbc.tx.QueryRow(_sql)
+	} else {
+		row = stat.dbc.db.QueryRow(_sql)
+	}
+
+	return
 }
