@@ -24,6 +24,7 @@ type qStruct struct {
 	Schema                []string
 	OnDuplicateKeyUpdate  bool
 	DuplicateKeyUpdateCol map[string]interface{}
+	freeLength            bool
 }
 
 type qClause struct {
@@ -74,7 +75,27 @@ func (_s *qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
 		ret = _s.Value.Index(idxArray).Field(idxField)
 	}
 
+	return
+}
+
+func (_s *qStruct) getElemType() (ret reflect.Type) {
+	if _s.Value.Kind() == reflect.Slice {
+		ret = _s.Value.Type().Elem()
+	} else {
+		ret = _s.Value.Type()
+	}
+
 	return ret
+}
+
+func (_s *qStruct) getRowValue(idxSlice int) (ret reflect.Value) {
+	if _s.Value.Kind() == reflect.Slice {
+		ret = _s.Value.Index(idxSlice)
+	} else {
+		ret = *_s.Value
+	}
+
+	return
 }
 
 func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
@@ -89,7 +110,7 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	// TODO: uint output 0x00
 	switch typeName.Name() {
 	case "Time":
-		return ret.(time.Time).Format(DateTimeFormat)
+		return ret.(time.Time).Format(ConfigMySQLDateTimeFormat)
 	default:
 		if typeName.Kind() == reflect.Map {
 			return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
@@ -156,12 +177,15 @@ func (_s *qStruct) composeInsertSQL() string {
 
 				if _field.Json != "" {
 					cV.Type = "json"
-					cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', ?", _field.Json))
-					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
+					if _field.JsonCast {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', CAST(? AS JSON)", _field.Json))
+					} else {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', ?", _field.Json))
+					}
 				} else {
 					cV.Stmt = append(cV.Stmt, "?")
-					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
 				}
+				cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
 				colVal[key] = cV
 			}
 		}
@@ -367,19 +391,15 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 				if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) {
 					if _field.Json != "" {
 						cV.Type = "json"
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
+						if _field.JsonCast {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', CAST(? AS JSON)", _field.Json))
+						} else {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
+						}
 					} else {
 						cV.Stmt = append(cV.Stmt, "?")
 					}
 					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
-					// } else if _field.Alt != nil && !isEqual(_field.AsNull, _field.Alt) {
-					//   // if AsNull == Alt, ignore!
-					//   if _field.Json != "" {
-					//     cV.Type = "json"
-					//     cV.Stmt = append(cV.Stmt, fmt.Sprintf("'$.%s', %#v", _field.Json, _field.Alt))
-					//   } else {
-					//     cV.Stmt = append(cV.Stmt, fmt.Sprintf("%#v", _field.Alt))
-					//   }
 				} else if _field.Self != "" {
 					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
 				}

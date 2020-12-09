@@ -113,8 +113,7 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 		case "bool":
 			asNull = false
 		case "Time":
-			// asNull = "0001-01-01T00:00:00Z"
-			asNull = "0001-01-01 00:00:00+00:00"
+			asNull = ConfigAsNullDateTimeFormat
 		default:
 			if field.Type.Kind() == reflect.Map {
 				asNull = "(nil)"
@@ -170,12 +169,13 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 	tableValues := structToValue(data)
 	tableMeta := tableValues.Type()
 	var (
-		table    = tableMeta.Name()
+		table    string
 		theCol   string
 		theTable string
 		noFrom   = false
 	)
 	if tableValues.Kind() != reflect.Slice {
+		table = tableMeta.Name()
 		for i := 0; i < tableValues.NumField(); i++ {
 
 			if hasTag(tableMeta.Field(i).Tag, "OMIT") {
@@ -208,8 +208,6 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				retStruct.Schema = append(retStruct.Schema, tableMeta.Field(i).Tag.Get("SCHEMAT"))
 			}
 
-			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
-
 			if !emptyTag(tableMeta.Field(i).Tag, "JOIN") {
 				retStruct.Joins = append(retStruct.Joins, tableMeta.Field(i).Tag.Get("JOIN"))
 			}
@@ -219,7 +217,12 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
+			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
 			_field.Json = getTagJson(tableMeta.Field(i))
+
+			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
+				_field.JsonCast = true
+			}
 
 			if hasTag(tableMeta.Field(i).Tag, "INDEX") {
 				_field.IsIndex = true
@@ -232,10 +235,16 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 		retStruct.Length = 1
 		retStruct.Value = tableValues
 	} else {
-		if tableValues.Cap() == 0 || tableValues.Len() == 0 {
-			return retStruct, errors.New("dataq: Data set is empty")
+		if tableValues.Len() == 0 || tableValues.Cap() == 0 {
+			// return retStruct, errors.New("dataq: Data set is empty")
+			// TODO: restrict freeLength!
+			if !tableValues.CanSet() {
+				return retStruct, errors.New("dataq: underlying variable cannot be setted")
+			}
+			retStruct.freeLength = true
 		}
-		tableMeta = tableValues.Index(0).Type()
+		tableMeta = tableValues.Type().Elem()
+		table = tableMeta.Name()
 		_lenField := tableMeta.NumField()
 
 		for i := 0; i < _lenField; i++ {
@@ -280,8 +289,12 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
-			_field.Json = getTagJson(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
+			_field.Json = getTagJson(tableMeta.Field(i))
+
+			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
+				_field.JsonCast = true
+			}
 
 			retStruct.Length = tableValues.Len()
 

@@ -133,7 +133,7 @@ func (dbc *QData) Model(model interface{}) *QStat {
 	stat := QStat{
 		dbc:          dbc.clone(),
 		preparedStmt: false,
-		Method:       sqlSelect,
+		Variables:    map[string]string{},
 	}
 	stat.Model(model)
 

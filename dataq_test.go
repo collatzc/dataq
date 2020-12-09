@@ -59,6 +59,41 @@ func TestMapWithStringAsKey(t *testing.T) {
 	}
 }
 
+func TestVariablesMap(t *testing.T) {
+	var a map[string]string
+	a = map[string]string{
+		"$T0": "abc",
+		"$T1": "def",
+	}
+	t.Error(len(a))
+	for _key, _val := range a {
+		t.Error(_key, _val)
+	}
+}
+
+func TestReflectValue(t *testing.T) {
+	var a = make([]Person, 0, 5)
+	// GOOD!
+	value := reflect.Indirect(reflect.ValueOf(&a))
+	// slice
+	t.Error("Kind", value.Kind())
+	t.Error("CanSet", value.CanSet())
+	t.Error("CanAddr", value.CanAddr())
+	t.Error("IsNil", value.IsNil())
+	t.Error("Len", value.Len())
+	t.Error("Cap", value.Cap())
+	t.Error("IsValid", value.IsValid())
+	// err: elem not exist
+	// t.Error("0", value.Index(0).Field(0))
+	// 1. Elem()
+	elemType := value.Type().Elem()
+	newElemValue := reflect.New(elemType)
+	newElemValue.Elem().Field(0).SetInt(12)
+	newElemValue.Elem().Field(1).SetString("OK")
+	value.Set(reflect.Append(value, newElemValue.Elem()))
+	t.Error(a, len(a), cap(a))
+}
+
 func TestConvertMapToJSON(t *testing.T) {
 	config := map[string]interface{}{
 		"currentTermName": "2020WS",
@@ -114,7 +149,7 @@ type Info struct {
 }
 
 type Person struct {
-	ID      int64     `INDEX:"" COL:"ID" TABLE:"Person"`
+	ID      int64     `COL:"ID" TABLE:"Person"`
 	Name    string    `COL:"NAME" ALT:""`
 	Age     int       `COL:"AGE"`
 	Profile string    `COL:"PROFILE" ALT:"{}" WHERE:"PROFILE<>\"\""`
@@ -179,13 +214,10 @@ func TestComposeSQL(t *testing.T) {
 	stuP, _ := analyseStruct(p)
 	insertSql := stuP.composeInsertSQL()
 	t.Error(insertSql)
-	t.Errorf("Values: %#v", stuP.GetValues())
 	updateSql := stuP.composeUpdateSQL([]qClause{{"AND", "`NAME`=?", []interface{}{"123"}}, {"OR", "`AGE`=?", []interface{}{1}}}, 0)
 	t.Error(updateSql)
-	t.Errorf("Values: %#v", stuP.GetValues())
 	selectSql := stuP.composeSelectSQL(nil)
 	t.Error(selectSql)
-	t.Errorf("Values: %#v", stuP.GetValues())
 	pp := []PersonJson{
 		{
 			ID:       1,
@@ -447,7 +479,7 @@ func TestTimeTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	av := reflect.ValueOf(a)
-	t.Errorf("%#v", av.Field(0).Interface().(time.Time).Format(DateTimeFormat))
+	t.Errorf("%#v", av.Field(0).Interface().(time.Time).Format(ConfigMySQLDateTimeFormat))
 }
 
 func TestRawSQL(t *testing.T) {
@@ -523,19 +555,21 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
+	ConfigParseDateTimeFormat = "2006-01-02 15:04:05"
 	db, err := Open(getDSN(t), 2)
 	checkErr(err, t)
 	defer db.Close()
-	// per1 := make([]Person, 2)
-	per1 := []Person{
-		{
-			ID: 2,
-		},
-		{
-			ID: 4,
-		},
-	}
+	// per1 := make([]Person, 0)
+	per1 := []Person{}
+	// per1 := []Person{
+	//   {
+	//     ID: 12,
+	//   },
+	//   {
+	//     ID: 14,
+	//   },
+	// }
 	// t.Errorf("%#v\n", db.Q().Where("ID>3").Models(&per1))
-	t.Errorf("%#v\n", db.Model(per1).Count())
-	t.Errorf("%#v\n", per1)
+	t.Errorf("%#v\n", db.Model(&per1).Query())
+	t.Error(per1)
 }

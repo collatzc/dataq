@@ -16,8 +16,9 @@ import (
 type QStat struct {
 	dbc          *QData
 	preparedStmt bool
-	Method       qMethod
 	sqlStruct    qStruct
+	Variables    map[string]string
+	Method       qMethod
 	Filters      []qClause
 	GroupS       string
 	HavingS      string
@@ -38,20 +39,50 @@ const sqlCount qMethod = 4
 const sqlBatchInsert qMethod = 5
 const sqlBatchUpdate qMethod = 6
 const sqlCreateTable qMethod = 100
+const ConfigMySQLDateTimeFormat = "2006-01-02 15:04:05.000-07:00"
+const ConfigAsNullDateTimeFormat = "0001-01-01 00:00:00.000+00:00"
+
+var ConfigParseDateTimeFormat = "2006-01-02 15:04:05.000"
 
 func (stat *QStat) String() string {
 	return fmt.Sprintf("Query Statement {\n\tMethod:\t%v\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.Method, stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
 }
 
+// PrepareNext will prepare the next sql query
 func (stat *QStat) PrepareNext(it bool) *QStat {
 	stat.preparedStmt = it
 
 	return stat
 }
 
-// Table which table?
+func (stat *QStat) FreeLength(it bool) *QStat {
+	stat.sqlStruct.freeLength = it
+
+	return stat
+}
+
+// Table setter
+// Also overwrite the $T0 variable
 func (stat *QStat) Table(table string) *QStat {
+	stat.Variables["$T0"] = table
 	stat.sqlStruct.Table = table
+
+	return stat
+}
+
+// TableOfFields changes all the `Table` of EACH FIELD when its original `Table` is equal to $T0
+func (stat *QStat) TableOfFields(table string) *QStat {
+	for _idx, _val := range stat.sqlStruct.Fields {
+		if _val.Table == stat.sqlStruct.Table {
+			stat.sqlStruct.Fields[_idx].Table = table
+		}
+	}
+
+	return stat.Table(table)
+}
+
+func (stat *QStat) Variable(key, value string) *QStat {
+	stat.Variables[key] = value
 
 	return stat
 }
@@ -95,6 +126,12 @@ func (stat *QStat) Where(operator, template string, vals ...interface{}) *QStat 
 // ClearWhere ...
 func (stat *QStat) ClearWhere() *QStat {
 	stat.Filters = make([]qClause, 0)
+
+	return stat
+}
+
+func (stat *QStat) Self(n int, param string) *QStat {
+	stat.sqlStruct.Fields[n].Self = param
 
 	return stat
 }
@@ -179,6 +216,8 @@ func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
 func (stat *QStat) SetModel(model interface{}) *QStat {
 	sqlStruct, err := analyseStruct(model)
 	stat.sqlStruct = sqlStruct
+	stat.Variables = map[string]string{}
+	stat.Variables["$T0"] = stat.sqlStruct.Table
 	panicErrHandle(err)
 
 	if stat.dbc.debugLvl > 3 {
@@ -200,6 +239,11 @@ func (stat *QStat) Model(model interface{}) *QStat {
 func (stat *QStat) Exec() *QResult {
 
 	_sql := stat.composeSQL()
+
+	for _replace, _new := range stat.Variables {
+		_sql = strings.ReplaceAll(_sql, fmt.Sprintf("`%s`", _replace), _replace)
+		_sql = strings.ReplaceAll(_sql, _replace, fmt.Sprintf("`%s`", _new))
+	}
 
 	if stat.dbc.debugLvl > 0 {
 		fmt.Println("Model SQL: " + _sql)
@@ -322,41 +366,44 @@ func (stat *QStat) Exec() *QResult {
 
 		var (
 			rowNumber = 0
-			modField  reflect.Value
+			rowValue  reflect.Value
 		)
+
+		if stat.sqlStruct.freeLength && stat.sqlStruct.Value.Cap() == 0 {
+			stat.sqlStruct.Value.Set(reflect.MakeSlice(stat.sqlStruct.Value.Type(), 0, 20))
+		}
 
 		for rawRows.Next() {
 			rawRows.Scan(tmpDS...)
-			// assign the values to model
-			for i, _field := range stat.sqlStruct.Fields {
 
-				modField = stat.sqlStruct.getValue(_field.ValIdx, rowNumber)
+			rowValue = reflect.New(stat.sqlStruct.getElemType()).Elem()
 
-				switch modField.Kind() {
+			for i := range stat.sqlStruct.Fields {
+				switch rowValue.Field(i).Kind() {
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					i64, err := strconv.ParseInt(string(values[i]), 10, modField.Type().Bits())
+					i64, err := strconv.ParseInt(string(values[i]), 10, rowValue.Field(i).Type().Bits())
 					if err != nil {
 						i64 = 0
 					}
-					modField.SetInt(i64)
+					rowValue.Field(i).SetInt(i64)
 				case reflect.Float32, reflect.Float64:
-					f64, err := strconv.ParseFloat(string(values[i]), modField.Type().Bits())
+					f64, err := strconv.ParseFloat(string(values[i]), rowValue.Field(i).Type().Bits())
 					if err != nil {
 						f64 = 0.0
 					}
-					modField.SetFloat(f64)
+					rowValue.Field(i).SetFloat(f64)
 				case reflect.String:
 					if values[i] == nil {
-						modField.SetString("")
+						rowValue.Field(i).SetString("")
 					} else {
-						modField.SetString(string(values[i]))
+						rowValue.Field(i).SetString(string(values[i]))
 					}
 				case reflect.Struct:
 					// TODO: not only parse Time
-					if _type := modField.Type(); _type.PkgPath() == "time" && _type.Name() == "Time" {
+					if _type := rowValue.Field(i).Type(); _type.PkgPath() == "time" {
 						// Need timezone and can be parsed by Javascript
-						t, _ := time.Parse(time.RFC3339, string(values[i]))
-						modField.Set(reflect.ValueOf(t))
+						t, _ := time.Parse(ConfigParseDateTimeFormat, string(values[i]))
+						rowValue.Field(i).Set(reflect.ValueOf(t))
 					}
 				case reflect.Map:
 					var _map map[string]interface{}
@@ -366,11 +413,18 @@ func (stat *QStat) Exec() *QResult {
 							Error: err,
 						}
 					}
-					modField.Set(reflect.ValueOf(_map))
+					rowValue.Field(i).Set(reflect.ValueOf(_map))
 				}
 			}
+			if stat.sqlStruct.freeLength {
+				stat.sqlStruct.Value.Set(reflect.Append(*stat.sqlStruct.Value, rowValue))
+			} else {
+				stat.sqlStruct.getRowValue(rowNumber).Set(rowValue)
+			}
+
 			rowNumber++
 		}
+
 		if stat.dbc.debugLvl > 0 {
 			fmt.Println("QResult: ReturnedRows [", rowNumber, "]")
 		}
@@ -424,7 +478,7 @@ func (stat *QStat) Exec() *QResult {
 }
 
 func (stat *QStat) composeSQL() string {
-	if stat.sqlStruct.Length == 0 {
+	if stat.sqlStruct.Length == 0 && !stat.sqlStruct.freeLength {
 		panic(errors.New("dataq: table name is required"))
 	}
 	var (
@@ -456,7 +510,7 @@ func (stat *QStat) composeSQL() string {
 		} else if stat.RowLimit != 0 {
 			sql.WriteString(" LIMIT ?")
 			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.RowLimit)
-		} else {
+		} else if !stat.sqlStruct.freeLength {
 			sql.WriteString(" LIMIT ?")
 			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.sqlStruct.Length)
 		}
@@ -622,9 +676,9 @@ func (stat *QStat) sqlPrepare(_sql string) (preparedStmt *sql.Stmt, err error) {
 
 func (stat *QStat) sqlQueryRow(_sql string) (row *sql.Row) {
 	if stat.dbc.tx != nil {
-		row = stat.dbc.tx.QueryRow(_sql)
+		row = stat.dbc.tx.QueryRow(_sql, stat.sqlStruct.Values...)
 	} else {
-		row = stat.dbc.db.QueryRow(_sql)
+		row = stat.dbc.db.QueryRow(_sql, stat.sqlStruct.Values...)
 	}
 
 	return
