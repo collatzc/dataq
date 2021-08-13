@@ -39,8 +39,8 @@ const sqlCount qMethod = 4
 const sqlBatchInsert qMethod = 5
 const sqlBatchUpdate qMethod = 6
 const sqlCreateTable qMethod = 100
-const ConfigMySQLDateTimeFormat = "2006-01-02 15:04:05.000-07:00"
-const ConfigAsNullDateTimeFormat = "0001-01-01 00:00:00.000+00:00"
+const ConfigMySQLDateTimeFormat = "2006-01-02 15:04:05.000"
+const ConfigAsNullDateTimeFormat = "0001-01-01 00:00:00.000"
 
 var ConfigParseDateTimeFormat = "2006-01-02 15:04:05.000"
 
@@ -167,11 +167,13 @@ func (stat *QStat) Limit(limit int) *QStat {
 // Offset the query OFFSET offset
 func (stat *QStat) Offset(offset int) *QStat {
 	stat.BeginOffset = offset
+
 	return stat
 }
 
 func (stat *QStat) Scope(fn func(*QStat) *QStat) *QStat {
 	ret := fn(stat)
+
 	return ret
 }
 
@@ -184,25 +186,16 @@ func (stat *QStat) TableSchema(defs ...string) *QStat {
 // SetBatchMode is the Setter of the BatchMode
 func (stat *QStat) SetBatchMode(val bool) *QStat {
 	stat.BatchMode = val
-	return stat
-}
 
-// SetOnDuplicateKeyUpdate is the Setter of the OnDuplicateKeyUpdate
-func (stat *QStat) SetOnDuplicateKeyUpdate(val bool) *QStat {
-	stat.sqlStruct.OnDuplicateKeyUpdate = val
 	return stat
 }
 
 // SetOnDuplicateKeyUpdateNCol is the Setter of the OnDuplicateKeyUpdate and DuplicateKeyUpdateCol
+// colDefin := "<col>": "<col_define>" will be handled as RAW
 func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]interface{}) *QStat {
 	stat.sqlStruct.OnDuplicateKeyUpdate = val
 	stat.sqlStruct.DuplicateKeyUpdateCol = colDefine
-	return stat
-}
 
-// SetDuplicateKeyUpdateCol is the Setter of the DuplicateKeyUpdateCol
-func (stat *QStat) SetDuplicateKeyUpdateCol(colDefine map[string]interface{}) *QStat {
-	stat.sqlStruct.DuplicateKeyUpdateCol = colDefine
 	return stat
 }
 
@@ -256,6 +249,8 @@ func (stat *QStat) Exec() *QResult {
 		fallthrough
 	case sqlInsert:
 		fallthrough
+	case sqlDelete:
+		fallthrough
 	case sqlUpdate:
 		if stat.sqlStruct.QueryOnly == true {
 			return &QResult{
@@ -266,6 +261,10 @@ func (stat *QStat) Exec() *QResult {
 		var (
 			rawResult sql.Result
 		)
+
+		if len(_sql) == 0 {
+			return &QResult{}
+		}
 
 		if stat.preparedStmt {
 			preparedStmt, err := stat.sqlPrepare(_sql)
@@ -548,6 +547,8 @@ func (stat *QStat) composeSQL() string {
 		sql.WriteString(stat.sqlStruct.composeUpdateSQL(stat.Filters, stat.RowLimit))
 	case sqlBatchUpdate:
 		sql.WriteString(stat.sqlStruct.composeBatchUpdateSQL())
+	case sqlDelete:
+		sql.WriteString(stat.sqlStruct.composeDeleteSQL(stat.Filters))
 	case sqlCreateTable:
 		sql.WriteString(stat.sqlStruct.composeCreateTableSQL())
 	}
@@ -579,6 +580,13 @@ func (stat *QStat) Count() *QResult {
 // Update return *QResult
 func (stat *QStat) Update() *QResult {
 	stat.Method = sqlUpdate
+
+	return stat.Exec()
+}
+
+// Delete return *QResult
+func (stat *QStat) Delete() *QResult {
+	stat.Method = sqlDelete
 
 	return stat.Exec()
 }

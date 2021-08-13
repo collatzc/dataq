@@ -224,10 +224,22 @@ func (_s *qStruct) composeInsertSQL() string {
 		sql.WriteString(fmt.Sprintf(" (%s)", strings.Join(val, ",")))
 	}
 
+	if _s.OnDuplicateKeyUpdate {
+		val = make([]string, 0, len(_s.DuplicateKeyUpdateCol))
+		for _col, _val := range _s.DuplicateKeyUpdateCol {
+			val = append(val, fmt.Sprintf("%s=%s", _col, _val))
+		}
+		sql.WriteString(fmt.Sprintf(" ON DUPLICATE KEY UPDATE %s", strings.Join(val, ",")))
+	}
+
 	return sql.String()
 }
 
 func (_s *qStruct) composeBatchInsertSQL() string {
+	if len(_s.BatchValue) == 0 {
+		return ""
+	}
+
 	var (
 		sql  strings.Builder
 		col  string
@@ -301,6 +313,20 @@ func (_s *qStruct) composeSelectSQL(filters []qClause) string {
 	}
 
 	condition := _s.composeWhereIndexCondition(filters)
+	if len(condition) > 0 {
+		sql.WriteString(fmt.Sprintf(" WHERE %s", condition))
+	}
+
+	return sql.String()
+}
+
+func (s *qStruct) composeDeleteSQL(filters []qClause) string {
+	var (
+		sql strings.Builder
+	)
+	sql.WriteString(fmt.Sprintf("DELETE FROM `%s`", s.Table))
+
+	condition := s.composeWhereIndexCondition(filters)
 	if len(condition) > 0 {
 		sql.WriteString(fmt.Sprintf(" WHERE %s", condition))
 	}
@@ -388,7 +414,9 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 					cV = colVal[key]
 				}
 
-				if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) {
+				if _field.Self != "" {
+					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
+				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) {
 					if _field.Json != "" {
 						cV.Type = "json"
 						if _field.JsonCast {
@@ -400,8 +428,6 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 						cV.Stmt = append(cV.Stmt, "?")
 					}
 					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
-				} else if _field.Self != "" {
-					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
 				}
 				colVal[key] = cV
 			}
@@ -559,6 +585,10 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 //	END
 //	WHERE id IN (1,2,3)
 func (_s *qStruct) composeBatchUpdateSQL() string {
+	if len(_s.BatchValue) == 0 {
+		return ""
+	}
+
 	var (
 		sql           strings.Builder
 		lenBatchValue = len(_s.BatchValue) - 1
