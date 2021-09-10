@@ -123,6 +123,15 @@ func (stat *QStat) Where(operator, template string, vals ...interface{}) *QStat 
 	return stat
 }
 
+func (stat *QStat) Set(template string, vals ...interface{}) *QStat {
+	stat.sqlStruct.Sets = append(stat.sqlStruct.Sets, qClause{
+		Template: template,
+		Values:   vals,
+	})
+
+	return stat
+}
+
 // ClearWhere ...
 func (stat *QStat) ClearWhere() *QStat {
 	stat.Filters = make([]qClause, 0)

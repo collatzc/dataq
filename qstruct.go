@@ -17,6 +17,7 @@ type qStruct struct {
 	Fields                []qField
 	Joins                 []string
 	Wheres                []string
+	Sets                  []qClause
 	Value                 *reflect.Value
 	Values                []interface{}
 	QueryOnly             bool
@@ -451,6 +452,13 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 			colVal[_key].Free()
 			colVal[_key] = nil
 			delete(colVal, _key)
+		}
+
+		if len(_s.Sets) != 0 {
+			for _, _set := range _s.Sets {
+				updates = append(updates, _set.Template)
+				_s.Values = append(_s.Values, _set.Values...)
+			}
 		}
 
 		if _s.hasIndex() {
