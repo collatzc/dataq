@@ -422,6 +422,19 @@ func (stat *QStat) Exec() *QResult {
 						}
 					}
 					rowValue.Field(i).Set(reflect.ValueOf(_map))
+				case reflect.Slice:
+					if len(values[i]) > 0 {
+						var _ValueSlice = reflect.New(rowValue.Field(i).Type())
+						err := json.Unmarshal(values[i], _ValueSlice.Interface())
+						if err != nil {
+							return &QResult{
+								Error: err,
+							}
+						}
+						rowValue.Field(i).Set(_ValueSlice.Elem())
+					} else {
+						rowValue.Field(i).Set(reflect.MakeSlice(rowValue.Field(i).Type(), 0, 0))
+					}
 				}
 			}
 			if stat.sqlStruct.freeLength {

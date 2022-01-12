@@ -1,6 +1,7 @@
 package dataq
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -108,6 +109,7 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 		typeName = _s.Value.Index(idxArray).Field(idxField).Type()
 		ret = _s.Value.Index(idxArray).Field(idxField).Interface()
 	}
+
 	// TODO: uint output 0x00
 	switch typeName.Name() {
 	case "Time":
@@ -115,6 +117,9 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	default:
 		if typeName.Kind() == reflect.Map {
 			return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
+		} else if typeName.Kind() == reflect.Slice {
+			j, _ := json.Marshal(ret)
+			return j
 		}
 		return ret
 	}
