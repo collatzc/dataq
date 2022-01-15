@@ -171,7 +171,7 @@ func (_s *qStruct) composeInsertSQL() string {
 	for i := 0; i < _s.Length; i++ {
 		for _, _field := range _s.Fields {
 			// ignore `TABLE`. prefix
-			if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
+			if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) || _field.Init {
 				key = fmt.Sprintf("`%s`", _field.ColName)
 				if colVal[key] == nil {
 					cV = _s.AllocColumnValue()

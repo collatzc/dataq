@@ -224,6 +224,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.JsonCast = true
 			}
 
+			if hasTag(tableMeta.Field(i).Tag, "INIT") {
+				_field.Init = true
+			}
+
 			if hasTag(tableMeta.Field(i).Tag, "INDEX") {
 				_field.IsIndex = true
 				retStruct.Index = append(retStruct.Index, _field)
@@ -294,6 +298,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
 				_field.JsonCast = true
+			}
+
+			if hasTag(tableMeta.Field(i).Tag, "INIT") {
+				_field.Init = true
 			}
 
 			retStruct.Length = tableValues.Len()

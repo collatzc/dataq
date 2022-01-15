@@ -9,6 +9,7 @@ type qField struct {
 	Alt      interface{}
 	Json     string
 	JsonCast bool
+	Init     bool
 	Self     string
 	Schema   string
 	ValIdx   int
@@ -28,7 +29,7 @@ func (_f qField) SelectString() (field string) {
 			field = fmt.Sprintf("%s->>'$.%s'", field, _f.Json)
 		}
 	} else {
-		field = fmt.Sprintf("%s", _f.ColName)
+		field = _f.ColName
 	}
 
 	return
