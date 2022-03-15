@@ -117,6 +117,8 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 		default:
 			if field.Type.Kind() == reflect.Map {
 				asNull = "(nil)"
+			} else if field.Type.Kind() == reflect.Slice {
+				asNull = []byte{0x6e, 0x75, 0x6c, 0x6c}
 			}
 		}
 	} else {
@@ -155,10 +157,7 @@ func emptyTag(tag reflect.StructTag, label string) bool {
 }
 
 func isEqual(val1, val2 interface{}) bool {
-	if fmt.Sprintf("%#v", val1) == fmt.Sprintf("%#v", val2) {
-		return true
-	}
-	return false
+	return fmt.Sprintf("%#v", val1) == fmt.Sprintf("%#v", val2)
 }
 
 // <table> {

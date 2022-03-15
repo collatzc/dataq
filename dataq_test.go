@@ -72,11 +72,12 @@ func TestVariablesMap(t *testing.T) {
 }
 
 func TestReflectValue(t *testing.T) {
-	var a = make([]Person, 0, 5)
+	var a []string
 	// GOOD!
-	value := reflect.Indirect(reflect.ValueOf(&a))
+	value := reflect.Indirect(reflect.ValueOf(a))
 	// slice
 	t.Error("Kind", value.Kind())
+	t.Error(fmt.Sprintf("%#v", a))
 	t.Error("CanSet", value.CanSet())
 	t.Error("CanAddr", value.CanAddr())
 	t.Error("IsNil", value.IsNil())
@@ -87,6 +88,7 @@ func TestReflectValue(t *testing.T) {
 	// t.Error("0", value.Index(0).Field(0))
 	// 1. Elem()
 	elemType := value.Type().Elem()
+	t.Error("TypeName", value.Type().Name())
 	newElemValue := reflect.New(elemType)
 	newElemValue.Elem().Field(0).SetInt(12)
 	newElemValue.Elem().Field(1).SetString("OK")
