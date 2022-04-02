@@ -167,7 +167,7 @@ func (_s *qStruct) composeInsertSQL() string {
 		val    []string
 		cV     *columnValue
 	)
-	_s.Values = make([]interface{}, 0)
+	_s.Values = make([]interface{}, 0, _s.Length*len(_s.Fields))
 	for i := 0; i < _s.Length; i++ {
 		for _, _field := range _s.Fields {
 			// ignore `TABLE`. prefix
@@ -191,7 +191,7 @@ func (_s *qStruct) composeInsertSQL() string {
 				} else {
 					cV.Stmt = append(cV.Stmt, "?")
 				}
-				cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
+				cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
 				colVal[key] = cV
 			}
 		}
