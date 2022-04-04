@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS Person (
 	NAME VARCHAR(50) DEFAULT '',
 	AGE TINYINT(2) DEFAULT 0,
 	PROFILE JSON,
+	Json JSON,
 	CREATED DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	PRIMARY KEY (ID)
 ) ENGINE=InnoDB;
@@ -172,13 +173,14 @@ type Person2 struct {
 }
 
 type PersonJson struct {
-	ID       int64     `INDEX:"" COL:"ID" TABLE:"Person"`
-	Name     string    `COL:"NAME" ALT:""`
-	Age      int       `COL:"AGE" SELF:"+1"`
-	Password string    `JSON:"PROFILE.password" json:"password"`
-	Username string    `JSON:"PROFILE.userName" json:"username"`
-	Created  time.Time `COL:"CREATED"`
-	Omit     string    `OMIT:""`
+	ID       int64                  `INDEX:"" COL:"ID" TABLE:"Person"`
+	Name     string                 `COL:"NAME" ALT:""`
+	Age      int                    `COL:"AGE" SELF:"+1"`
+	Json     map[string]interface{} `JSONMERGEPATCH:"Json"`
+	Password string                 `JSON:"PROFILE.password" json:"password"`
+	Username string                 `JSON:"PROFILE.userName" json:"username"`
+	Created  time.Time              `COL:"CREATED"`
+	Omit     string                 `OMIT:""`
 }
 
 type PersonNoTable struct {
@@ -199,16 +201,21 @@ type CurrTimestamp struct {
  * `ASNULL` the value of the field equal ASNULL will be ignore in INSERT-statement
  */
 type PersonInfo struct {
-	PId     int64  `INDEX:"" COL:"Person.ID" TABLE:"Person" JOIN:"JOIN Info ON Info.P_ID=Person.ID" WHERE:"Person.ID=1"`
-	Name    string `COL:"Info.Name"`
-	Age     int    `INDEX:"Art"`
-	Profile string `ASNULL:"" ALT:"{}"`
-	Comment string `COL:"CMT"`
+	PId     int64                  `INDEX:"" COL:"Person.ID" TABLE:"Person" JOIN:"JOIN Info ON Info.P_ID=Person.ID" WHERE:"Person.ID=1"`
+	Name    string                 `COL:"Info.Name"`
+	Json    map[string]interface{} `JSONPATCHMERGE:"Json"`
+	Age     int                    `INDEX:"Art"`
+	Profile string                 `ASNULL:"" ALT:"{}"`
+	Comment string                 `COL:"CMT"`
 }
 
 func TestComposeSQL(t *testing.T) {
 	p := PersonJson{
-		ID:       3,
+		ID: 3,
+		Json: map[string]interface{}{
+			"a": 1,
+			"b": 2,
+		},
 		Name:     "CC",
 		Password: "password123123123",
 		Username: "username123123123",
@@ -218,6 +225,7 @@ func TestComposeSQL(t *testing.T) {
 	t.Error(insertSql)
 	updateSql := stuP.composeUpdateSQL([]qClause{{"AND", "`NAME`=?", []interface{}{"123"}}, {"OR", "`AGE`=?", []interface{}{1}}}, 0)
 	t.Error(updateSql)
+	t.Error("Values", stuP.GetValues())
 	selectSql := stuP.composeSelectSQL(nil)
 	t.Error(selectSql)
 	pp := []PersonJson{

@@ -411,7 +411,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 			cV     *columnValue
 		)
 		for _, _field := range _s.Fields {
-			if _field.IsIndex == false && _field.Table == _s.Table {
+			if !_field.IsIndex && _field.Table == _s.Table {
 				key = fmt.Sprintf("`%s`", _field.ColName)
 				if colVal[key] == nil {
 					cV = _s.AllocColumnValue()
@@ -430,6 +430,8 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 						} else {
 							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
 						}
+					} else if _field.JsonMergePatch != "" {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PATCH(%s, ?)", _field.JsonMergePatch))
 					} else {
 						cV.Stmt = append(cV.Stmt, "?")
 					}
@@ -494,7 +496,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 		}
 
 		if len(condition) > 0 {
-			sql.WriteString(fmt.Sprintf("UPDATE `%s` SET%s WHERE %s", _s.Table, strings.Join(updates, ", "), strings.Join(condition, " AND ")))
+			sql.WriteString(fmt.Sprintf("UPDATE `%s` SET %s WHERE %s", _s.Table, strings.Join(updates, ", "), strings.Join(condition, " AND ")))
 			if hasLimit {
 				sql.WriteString(fmt.Sprintf(" LIMIT %#v", limit))
 			}

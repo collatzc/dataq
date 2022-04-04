@@ -3,17 +3,18 @@ package dataq
 import "fmt"
 
 type qField struct {
-	Table    string
-	ColName  string
-	AsNull   interface{}
-	Alt      interface{}
-	Json     string
-	JsonCast bool
-	Init     bool
-	Self     string
-	Schema   string
-	ValIdx   int
-	IsIndex  bool
+	Table          string
+	ColName        string
+	AsNull         interface{}
+	Alt            interface{}
+	Json           string
+	JsonCast       bool
+	JsonMergePatch string
+	Init           bool
+	Self           string
+	Schema         string
+	ValIdx         int
+	IsIndex        bool
 }
 
 func (_f qField) String() string {
