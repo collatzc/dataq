@@ -122,7 +122,8 @@ func TestAsNull(t *testing.T) {
 	var str = "map[string]interface {}(nil)"
 	var iii = "1"
 	var testTime = time.Time{}
-	t.Errorf("%#v %#v %v", a, str, iii)
+	j, _ := json.Marshal(a)
+	t.Errorf("%#v %#v %#v %v", j, a, str, iii)
 	t.Errorf("%v", testTime)
 }
 

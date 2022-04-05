@@ -18,18 +18,6 @@ func structToValue(data interface{}) *reflect.Value {
 	return &tableValues
 }
 
-// for type Slice
-func structsToValue(data interface{}) *reflect.Value {
-	tableValues := reflect.ValueOf(data)
-	if tableValues.Kind() == reflect.Ptr {
-		tableValues = reflect.Indirect(tableValues)
-	}
-
-	tableValues = tableValues.Index(0)
-
-	return &tableValues
-}
-
 func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) (theCol, theTable, nextTable string) {
 	theCol = tag.Get("COL")
 	nextTable = tag.Get("TABLE")
@@ -116,7 +104,7 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 			asNull = ConfigAsNullDateTimeFormat
 		default:
 			if field.Type.Kind() == reflect.Map {
-				asNull = "(nil)"
+				asNull = []byte{0x6e, 0x75, 0x6c, 0x6c}
 			} else if field.Type.Kind() == reflect.Slice {
 				asNull = []byte{0x6e, 0x75, 0x6c, 0x6c}
 			}
@@ -320,7 +308,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 	}
 
 	// `FROM <tablename>` will omit
-	if noFrom == true {
+	if noFrom {
 		retStruct.QueryOnly = true
 		retStruct.Table = ""
 	}

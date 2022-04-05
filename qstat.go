@@ -261,7 +261,7 @@ func (stat *QStat) Exec() *QResult {
 	case sqlDelete:
 		fallthrough
 	case sqlUpdate:
-		if stat.sqlStruct.QueryOnly == true {
+		if stat.sqlStruct.QueryOnly {
 			return &QResult{
 				Error: errors.New("dataq: query only"),
 			}
@@ -284,6 +284,7 @@ func (stat *QStat) Exec() *QResult {
 				}
 			}
 
+			fmt.Println("===Values===", stat.sqlStruct.Values)
 			rawResult, err = preparedStmt.Exec(stat.sqlStruct.Values...)
 			if err != nil {
 				return &QResult{

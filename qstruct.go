@@ -70,16 +70,6 @@ func (_s *qStruct) hasIndex() bool {
 	return len(_s.Index) != 0
 }
 
-func (_s *qStruct) getValue(idxField, idxArray int) (ret reflect.Value) {
-	if _s.Value.Kind() != reflect.Slice {
-		ret = _s.Value.Field(idxField)
-	} else {
-		ret = _s.Value.Index(idxArray).Field(idxField)
-	}
-
-	return
-}
-
 func (_s *qStruct) getElemType() (ret reflect.Type) {
 	if _s.Value.Kind() == reflect.Slice {
 		ret = _s.Value.Type().Elem()
@@ -116,7 +106,9 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 		return ret.(time.Time).Format(ConfigMySQLDateTimeFormat)
 	default:
 		if typeName.Kind() == reflect.Map {
-			return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
+			j, _ := json.Marshal(ret)
+			return j
+			// return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
 		} else if typeName.Kind() == reflect.Slice {
 			j, _ := json.Marshal(ret)
 			return j
@@ -519,7 +511,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 			var _PkVal = _s.getValueInterface(_s.Index[0].ValIdx, i)
 			ids = append(ids, fmt.Sprintf("%#v", _PkVal))
 			for _, _field := range _s.Fields {
-				if _field.IsIndex == false && _field.Table == _s.Table {
+				if !_field.IsIndex && _field.Table == _s.Table {
 					key = fmt.Sprintf("`%s`", _field.ColName)
 					if colVal[key] == nil {
 						colVal[key] = make(map[interface{}]*columnValue)
@@ -629,7 +621,7 @@ func (_s *qStruct) composeBatchUpdateSQL() string {
 					condMap[_cond] = true
 				}
 				if _idx == lenBatchValue {
-					fieldName[_i] += fmt.Sprintf("END")
+					fieldName[_i] += "END"
 				}
 				_i++
 			}
