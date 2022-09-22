@@ -149,6 +149,12 @@ func (_s *qStruct) hasWheres() bool {
 	return len(_s.Wheres) != 0
 }
 
+func (_s *qStruct) setFieldIgnoreNull(i int) *qStruct {
+	_s.Fields[i].IgnoreNull = true
+
+	return _s
+}
+
 // If qStruct.Length > 1, make sure each element has the same columns to insert!
 func (_s *qStruct) composeInsertSQL() string {
 	var (
@@ -380,12 +386,13 @@ func (s *qStruct) composeWhereIndexCondition(filters []qClause) string {
 
 // IMPORTANT: Only using index, pk to update!
 // UPDATE table SET Col1 = CASE pk
-// 												WHEN 1 THEN ...
-// 												WHEN 2 THEN ...
-// 												ELSE Col1
-// 												END,
-// 									...
-// 									WHERE pk IN (1, 2, 3);
+//
+//				WHEN 1 THEN ...
+//				WHEN 2 THEN ...
+//				ELSE Col1
+//				END,
+//	...
+//	WHERE pk IN (1, 2, 3);
 func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 	var (
 		sql       strings.Builder
@@ -414,7 +421,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 
 				if _field.Self != "" {
 					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
-				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) {
+				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) || _field.IgnoreNull {
 					if _field.Json != "" {
 						cV.Type = "json"
 						if _field.JsonCast {
@@ -580,6 +587,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 }
 
 // UPDATE categories
+//
 //	SET display_order = CASE id
 //	WHEN 1 THEN 3
 //	WHEN 2 THEN 4

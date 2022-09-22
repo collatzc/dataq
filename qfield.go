@@ -15,6 +15,7 @@ type qField struct {
 	Schema         string
 	ValIdx         int
 	IsIndex        bool
+	IgnoreNull     bool
 }
 
 func (_f qField) String() string {

@@ -177,6 +177,7 @@ type PersonJson struct {
 	ID       int64                  `INDEX:"" COL:"ID" TABLE:"Person"`
 	Name     string                 `COL:"NAME" ALT:""`
 	Age      int                    `COL:"AGE" SELF:"+1"`
+	SN       int                    `COL:"SN"`
 	Json     map[string]interface{} `JSONMERGEPATCH:"Json"`
 	Password string                 `JSON:"PROFILE.password" json:"password"`
 	Username string                 `JSON:"PROFILE.userName" json:"username"`
@@ -212,7 +213,8 @@ type PersonInfo struct {
 
 func TestComposeSQL(t *testing.T) {
 	p := PersonJson{
-		ID: 3,
+		ID: 0,
+		SN: 0,
 		Json: map[string]interface{}{
 			"a": 1,
 			"b": 2,
@@ -222,6 +224,7 @@ func TestComposeSQL(t *testing.T) {
 		Username: "username123123123",
 	}
 	stuP, _ := analyseStruct(p)
+	// stuP.setFieldIgnoreNull(3)
 	insertSql := stuP.composeInsertSQL()
 	t.Error(insertSql)
 	updateSql := stuP.composeUpdateSQL([]qClause{{"AND", "`NAME`=?", []interface{}{"123"}}, {"OR", "`AGE`=?", []interface{}{1}}}, 0)

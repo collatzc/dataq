@@ -1,6 +1,6 @@
 module github.com/collatzc/dataq
 
-go 1.15
+go 1.19
 
 require (
 	github.com/collatzc/jsonl v0.1.0

@@ -97,6 +97,13 @@ func (stat *QStat) IndexWith(i int) *QStat {
 	return stat
 }
 
+// IgnoreNullAt sets the i-th (start from 0)
+func (stat *QStat) IgnoreNullAt(i int) *QStat {
+	stat.sqlStruct.setFieldIgnoreNull(i)
+
+	return stat
+}
+
 // Join ...
 func (stat *QStat) Join(joins ...string) *QStat {
 	stat.sqlStruct.Joins = append(stat.sqlStruct.Joins, joins...)
