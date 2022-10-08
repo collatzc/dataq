@@ -26,6 +26,7 @@ type QStat struct {
 	RowLimit     int
 	BeginOffset  int
 	BatchMode    bool
+	LockFor      string
 }
 
 // qMethod is the basic method type
@@ -39,6 +40,10 @@ const sqlCount qMethod = 4
 const sqlBatchInsert qMethod = 5
 const sqlBatchUpdate qMethod = 6
 const sqlCreateTable qMethod = 100
+const LookForShare = "SHARE"
+const LookForUpdate = "UPDATE"
+const LookForUpdateNoWait = "UPDATE NOWAIT"
+const LookForUpdateSkipLocked = "UPDATE SKIP LOCKED"
 const ConfigMySQLDateTimeFormat = "2006-01-02 15:04:05.000"
 const ConfigAsNullDateTimeFormat = "0001-01-01 00:00:00.000"
 
@@ -218,6 +223,13 @@ func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]in
 // AppendBatchValue append the maps-type value when batch mode enabled
 func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
 	stat.sqlStruct.AppendBatchValue(val)
+
+	return stat
+}
+
+func (stat *QStat) QueryLockFor(lockType string) *QStat {
+	stat.LockFor = lockType
+
 	return stat
 }
 
@@ -291,7 +303,6 @@ func (stat *QStat) Exec() *QResult {
 				}
 			}
 
-			fmt.Println("===Values===", stat.sqlStruct.Values)
 			rawResult, err = preparedStmt.Exec(stat.sqlStruct.Values...)
 			if err != nil {
 				return &QResult{
@@ -471,7 +482,7 @@ func (stat *QStat) Exec() *QResult {
 
 			preparedStmt.QueryRow(stat.sqlStruct.Values...).Scan(&res.ReturnedRows)
 		} else {
-			stat.sqlQueryRow(_sql).Scan(&res.ReturnedRows)
+			stat.QueryRowUnsafe(_sql, stat.sqlStruct.Values...).Scan(&res.ReturnedRows)
 		}
 
 		return &res
@@ -548,6 +559,10 @@ func (stat *QStat) composeSQL() string {
 			sql.WriteString(" OFFSET ?")
 			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.BeginOffset)
 		}
+
+		if stat.LockFor != "" {
+			sql.WriteString(fmt.Sprintf(" FOR %s", stat.LockFor))
+		}
 	case sqlCount:
 		sql.WriteString(stat.sqlStruct.composeCountSQL(stat.Filters))
 		hasGroupBy := false
@@ -568,6 +583,7 @@ func (stat *QStat) composeSQL() string {
 			sql.WriteString(" OFFSET ?")
 			stat.sqlStruct.Values = append(stat.sqlStruct.Values, stat.BeginOffset)
 		}
+
 		if hasGroupBy {
 			var sqltemp strings.Builder
 			sqltemp.WriteString(fmt.Sprintf("SELECT COUNT(1) FROM (%s) AS c", sql.String()))
@@ -712,12 +728,20 @@ func (stat *QStat) sqlPrepare(_sql string) (preparedStmt *sql.Stmt, err error) {
 	return
 }
 
-func (stat *QStat) sqlQueryRow(_sql string) (row *sql.Row) {
+func (stat *QStat) QueryRowUnsafe(query string, args ...interface{}) (row *sql.Row) {
 	if stat.dbc.tx != nil {
-		row = stat.dbc.tx.QueryRow(_sql, stat.sqlStruct.Values...)
+		row = stat.dbc.tx.QueryRow(query, args...)
 	} else {
-		row = stat.dbc.db.QueryRow(_sql, stat.sqlStruct.Values...)
+		row = stat.dbc.db.QueryRow(query, args...)
 	}
 
 	return
+}
+
+func (stat *QStat) ExecUnsafe(query string, args ...interface{}) (sql.Result, error) {
+	if stat.dbc.tx != nil {
+		return stat.dbc.tx.Exec(query, args...)
+	} else {
+		return stat.dbc.db.Exec(query, args...)
+	}
 }

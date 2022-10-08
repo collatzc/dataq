@@ -156,7 +156,7 @@ type Person struct {
 	ID      int64     `COL:"ID" TABLE:"Person"`
 	Name    string    `COL:"NAME" ALT:""`
 	Age     int       `COL:"AGE"`
-	Profile string    `COL:"PROFILE" ALT:"{}" WHERE:"PROFILE<>\"\""`
+	Profile string    `COL:"PROFILE" ALT:"{}"`
 	Created time.Time `COL:"CREATED"`
 	Omit    string    `OMIT:""`
 }
@@ -570,11 +570,16 @@ func TestUpdate(t *testing.T) {
 
 func TestQuery(t *testing.T) {
 	ConfigParseDateTimeFormat = "2006-01-02 15:04:05"
-	db, err := Open(getDSN(t), 2)
+	dsn := getDSN(t)
+	t.Log("dsn", dsn)
+	db, err := Open(dsn, 2)
 	checkErr(err, t)
 	defer db.Close()
 	// per1 := make([]Person, 0)
-	per1 := []Person{}
+	per1 := Person{
+		Name: "A2",
+		Age:  12,
+	}
 	// per1 := []Person{
 	//   {
 	//     ID: 12,
@@ -584,6 +589,33 @@ func TestQuery(t *testing.T) {
 	//   },
 	// }
 	// t.Errorf("%#v\n", db.Q().Where("ID>3").Models(&per1))
-	t.Errorf("%#v\n", db.Model(&per1).Query())
+	t.Errorf("%#v\n", db.Model(per1).Insert())
 	t.Error(per1)
+}
+
+func TestLockForShare(t *testing.T) {
+	db, err := Open(getDSN(t), 2)
+	checkErr(err, t)
+	defer db.Close()
+
+	// session 1
+	s1 := db.Begin()
+	per1 := new(Person)
+	t.Log("s1", s1.Model(per1).Where("AND", "ID=?", 1).QueryLockFor(LookForShare).Query())
+	t.Log("s1 Person", per1)
+	longRunning := time.AfterFunc(5*time.Second, func() {
+		t.Log("s1 change Age to 111")
+		per1.Age = 111
+		t.Log("s1", s1.Model(per1).IndexWith(0).Update())
+		t.Log("s1 Commit", s1.Commit())
+		// t.Log("s1 Rollback", s1.Rollback())
+	})
+	defer longRunning.Stop()
+
+	s2 := db.Begin()
+	defer s2.Rollback()
+	per2 := new(Person)
+	t.Log("s2", s2.Model(per2).Where("AND", "ID=?", 1).QueryLockFor(LookForShare).Query())
+	t.Log("s2 Person", per2)
+	time.Sleep(10 * time.Second)
 }
