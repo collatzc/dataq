@@ -4,7 +4,9 @@ import "fmt"
 
 type qField struct {
 	Table          string
+	TableAlias     string
 	ColName        string
+	ColAlias       string
 	AsNull         interface{}
 	Alt            interface{}
 	Json           string

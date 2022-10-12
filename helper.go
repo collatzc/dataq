@@ -148,9 +148,10 @@ func isEqual(val1, val2 interface{}) bool {
 	return fmt.Sprintf("%#v", val1) == fmt.Sprintf("%#v", val2)
 }
 
-// <table> {
-//	<column>: <values> `<tag>`
-// }
+//	<table> {
+//		<column>: <values> `<tag>`
+//	}
+//
 // `COL`: "TABLE.FIELD"
 func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 	tableValues := structToValue(data)
@@ -175,7 +176,6 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				Table:   theTable,
 				ColName: theCol,
 				ValIdx:  i,
-				IsIndex: false,
 			}
 
 			if hasTag(tableMeta.Field(i).Tag, "NOFROM") {
@@ -205,6 +205,8 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
+			_field.TableAlias = tableMeta.Field(i).Tag.Get("TABLEAS")
+			_field.ColAlias = tableMeta.Field(i).Tag.Get("COLAS")
 			_field.Json = getTagJson(tableMeta.Field(i))
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
@@ -283,6 +285,8 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
+			_field.TableAlias = tableMeta.Field(i).Tag.Get("TABLEAS")
+			_field.ColAlias = tableMeta.Field(i).Tag.Get("COLAS")
 			_field.Json = getTagJson(tableMeta.Field(i))
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
