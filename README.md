@@ -61,10 +61,12 @@
 | Tag          | Description                                  |
 |--------------|----------------------------------------------|
 | `TABLE`      | The table name.                              |
-| `TABLEAS`      | The table alias.                           |
+| `TABLEAS`    | The table part of field when select.         |
+| `TABLEALIAS` | The table alias.                             |
 | `COL`        | The field name, also can be a function and with Tag `RAW`. |
-| `COLAS`        | The field alias, also can be a function and with Tag `RAW`. |
+| `COLAS`       | The field alias, also can be a function and with Tag `RAW`. |
 | `INDEX`      | This field is an index.                      |
+| `COUNTON`    | The value of `COUNT(x)` function.            |
 | `ASNULL`     | As NULL value.                               |
 | `ALT`        | Alternative value.                           |
 | `WHERE`      | The fixed part of `WHERE` clause.            |

@@ -13,6 +13,8 @@ import (
 
 type qStruct struct {
 	Table                 string
+	TableAlias            string
+	CountOn               string
 	Length                int
 	Index                 []qField
 	Fields                []qField
@@ -310,6 +312,9 @@ func (_s *qStruct) composeSelectSQL(filters []qClause) string {
 
 	if _s.Table != "" {
 		sql.WriteString(fmt.Sprintf(" FROM `%s`", _s.Table))
+		if _s.TableAlias != "" {
+			sql.WriteString(fmt.Sprintf(" AS `%s`", _s.TableAlias))
+		}
 	}
 
 	if _s.hasJoins() {
@@ -342,7 +347,16 @@ func (_s *qStruct) composeCountSQL(filters []qClause) string {
 	var (
 		sql strings.Builder
 	)
-	sql.WriteString(fmt.Sprintf("SELECT COUNT(1) FROM `%s`", _s.Table))
+
+	if _s.CountOn == "" {
+		sql.WriteString(fmt.Sprintf("SELECT COUNT(1) FROM `%s`", _s.Table))
+	} else {
+		sql.WriteString(fmt.Sprintf("SELECT COUNT(%s) FROM `%s`", _s.CountOn, _s.Table))
+	}
+
+	if _s.TableAlias != "" {
+		sql.WriteString(fmt.Sprintf(" AS `%s`", _s.TableAlias))
+	}
 
 	if _s.hasJoins() {
 		sql.WriteString(fmt.Sprintf(" %s", strings.Join(_s.Joins, " ")))

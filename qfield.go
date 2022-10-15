@@ -4,7 +4,6 @@ import "fmt"
 
 type qField struct {
 	Table          string
-	TableAlias     string
 	ColName        string
 	ColAlias       string
 	AsNull         interface{}
@@ -28,13 +27,12 @@ func (_f qField) String() string {
 func (_f qField) SelectString() (field string) {
 	if len(_f.Table) != 0 {
 		field = fmt.Sprintf("`%s`.`%s`", _f.Table, _f.ColName)
-
-		if _f.Json != "" {
-			field = fmt.Sprintf("%s->>'$.%s'", field, _f.Json)
-		}
 	} else {
 		field = _f.ColName
 	}
 
+	if _f.Json != "" {
+		field = fmt.Sprintf("%s->>'$.%s'", field, _f.Json)
+	}
 	return
 }
