@@ -18,10 +18,11 @@ func structToValue(data interface{}) *reflect.Value {
 	return &tableValues
 }
 
-func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) (theCol, theTable, nextTable string) {
+func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) (theCol, theTable, nextTable, tableAlias string) {
 	theCol = tag.Get("COL")
 	nextTable = tag.Get("TABLE")
 	json := tag.Get("JSON")
+	tableAlias = tag.Get("TABLEALIAS")
 	if theCol != "" {
 		idxPoint := strings.Index(theCol, ".")
 		if idxPoint != -1 {
@@ -48,7 +49,7 @@ func getColNameTable(fieldName string, tag reflect.StructTag, prevTable string) 
 		theCol = keys[0]
 	}
 
-	return theCol, theTable, nextTable
+	return theCol, theTable, nextTable, tableAlias
 }
 
 func parseInterface(typeName reflect.Type, str string) (val interface{}) {
@@ -148,18 +149,20 @@ func isEqual(val1, val2 interface{}) bool {
 	return fmt.Sprintf("%#v", val1) == fmt.Sprintf("%#v", val2)
 }
 
-// <table> {
-//	<column>: <values> `<tag>`
-// }
+//	<table> {
+//		<column>: <values> `<tag>`
+//	}
+//
 // `COL`: "TABLE.FIELD"
 func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 	tableValues := structToValue(data)
 	tableMeta := tableValues.Type()
 	var (
-		table    string
-		theCol   string
-		theTable string
-		noFrom   = false
+		table      string
+		tableAlias string
+		theCol     string
+		theTable   string
+		noFrom     = false
 	)
 	if tableValues.Kind() != reflect.Slice {
 		table = tableMeta.Name()
@@ -169,19 +172,20 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				continue
 			}
 
-			theCol, theTable, table = getColNameTable(tableMeta.Field(i).Name, tableMeta.Field(i).Tag, table)
+			theCol, theTable, table, tableAlias = getColNameTable(tableMeta.Field(i).Name, tableMeta.Field(i).Tag, table)
 
 			_field := qField{
 				Table:   theTable,
 				ColName: theCol,
 				ValIdx:  i,
-				IsIndex: false,
 			}
 
 			if hasTag(tableMeta.Field(i).Tag, "NOFROM") {
 				noFrom = true
 			} else if i == 0 {
 				retStruct.Table = table
+				retStruct.TableAlias = tableAlias
+				retStruct.CountOn = tableMeta.Field(i).Tag.Get("COUNTON")
 			}
 
 			if hasTag(tableMeta.Field(i).Tag, "RAW") {
@@ -205,6 +209,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
+			if tableMeta.Field(i).Tag.Get("TABLEAS") != "" {
+				_field.Table = tableMeta.Field(i).Tag.Get("TABLEAS")
+			}
+			_field.ColAlias = tableMeta.Field(i).Tag.Get("COLAS")
 			_field.Json = getTagJson(tableMeta.Field(i))
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
@@ -246,7 +254,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				continue
 			}
 
-			theCol, theTable, table = getColNameTable(tableMeta.Field(i).Name, tableMeta.Field(i).Tag, table)
+			theCol, theTable, table, tableAlias = getColNameTable(tableMeta.Field(i).Name, tableMeta.Field(i).Tag, table)
 			_field := qField{
 				Table:   theTable,
 				ColName: theCol,
@@ -258,6 +266,8 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				noFrom = true
 			} else if i == 0 {
 				retStruct.Table = table
+				retStruct.TableAlias = tableAlias
+				retStruct.CountOn = tableMeta.Field(i).Tag.Get("COUNTON")
 			}
 
 			if hasTag(tableMeta.Field(i).Tag, "RAW") {
@@ -283,6 +293,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			_field.AsNull = getAsNull(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
+			if tableMeta.Field(i).Tag.Get("TABLEAS") != "" {
+				_field.Table = tableMeta.Field(i).Tag.Get("TABLEAS")
+			}
+			_field.ColAlias = tableMeta.Field(i).Tag.Get("COLAS")
 			_field.Json = getTagJson(tableMeta.Field(i))
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {

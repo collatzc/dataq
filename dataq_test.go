@@ -601,7 +601,7 @@ func TestLockForShare(t *testing.T) {
 	// session 1
 	s1 := db.Begin()
 	per1 := new(Person)
-	t.Log("s1", s1.Model(per1).Where("AND", "ID=?", 1).QueryLockFor(LockForUpdate).Query())
+	t.Log("s1", s1.Model(per1).Where("AND", "ID=?", 1).QueryLockFor(LookForShare).Query())
 	t.Log("s1 Person", per1)
 	longRunning := time.AfterFunc(5*time.Second, func() {
 		t.Log("s1 change Age to 111")
@@ -615,8 +615,7 @@ func TestLockForShare(t *testing.T) {
 	s2 := db.Begin()
 	defer s2.Rollback()
 	per2 := new(Person)
-	// t.Log("s2", s2.Model(per2).Where("AND", "ID=?", 1).QueryLockFor(LookForShare).Query())
-	t.Log("s2", s2.Model(per2).Where("AND", "ID=?", 1).Query())
+	t.Log("s2", s2.Model(per2).Where("AND", "ID=?", 1).QueryLockFor(LookForShare).Query())
 	t.Log("s2 Person", per2)
 	time.Sleep(10 * time.Second)
 }
