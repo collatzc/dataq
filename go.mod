@@ -1,8 +1,5 @@
 module github.com/collatzc/dataq
 
-go 1.19
+go 1.20
 
-require (
-	github.com/collatzc/jsonl v0.1.0
-	github.com/go-sql-driver/mysql v1.6.0
-)
+require github.com/go-sql-driver/mysql v1.6.0

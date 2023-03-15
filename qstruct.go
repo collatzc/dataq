@@ -107,16 +107,49 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	case "Time":
 		return ret.(time.Time).Format(ConfigMySQLDateTimeFormat)
 	default:
-		if typeName.Kind() == reflect.Map {
+		switch typeName.Kind() {
+		case reflect.Map:
 			j, _ := json.Marshal(ret)
 			return j
-			// return strings.ReplaceAll(strings.Replace(fmt.Sprintf("%#v", ret), "map[string]interface {}", "", 1), "\"", "\"")
-		} else if typeName.Kind() == reflect.Slice {
+		case reflect.Slice:
 			j, _ := json.Marshal(ret)
 			return j
+		default:
+			return ret
 		}
-		return ret
 	}
+}
+
+func (_s *qStruct) getValueEmptyValue(idxField, idxArray int) interface{} {
+	var typeName reflect.Type
+	if _s.Value.Kind() != reflect.Slice {
+		typeName = _s.Value.Field(idxField).Type()
+	} else {
+		typeName = _s.Value.Index(idxArray).Field(idxField).Type()
+	}
+
+	switch typeName.Name() {
+	case "int", "int8", "int16", "int32", "int64":
+		fallthrough
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return 0
+	case "float32", "float64":
+		return 0.0
+	case "string":
+		return ""
+	case "bool":
+		return false
+	case "Time":
+		return time.Now().UTC().Format(ConfigMySQLDateTimeFormat)
+	default:
+		switch typeName.Kind() {
+		case reflect.Map:
+			return "{}"
+		case reflect.Slice:
+			return "[]"
+		}
+	}
+	return ""
 }
 
 func (_s *qStruct) getIndexSQL() (sql string) {
@@ -435,7 +468,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 
 				if _field.Self != "" {
 					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
-				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) || _field.IgnoreNull {
+				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) || _field.IgnoreNull || (_field.AsClear != nil && _field.AsClear == _s.getValueInterface(_field.ValIdx, 0)) {
 					if _field.Json != "" {
 						cV.Type = "json"
 						if _field.JsonCast {
@@ -448,7 +481,12 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 					} else {
 						cV.Stmt = append(cV.Stmt, "?")
 					}
-					cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
+
+					if _field.AsClear != nil && _field.AsClear == _s.getValueInterface(_field.ValIdx, 0) {
+						cV.Val = append(cV.Val, _s.getValueEmptyValue(_field.ValIdx, 0))
+					} else {
+						cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, 0))
+					}
 				}
 				colVal[key] = cV
 			}

@@ -117,6 +117,15 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 	return asNull
 }
 
+func getAsClear(field reflect.StructField) interface{} {
+	asClearStr := field.Tag.Get("ASCLEAR")
+	if asClearStr != "" {
+		return parseInterface(field.Type, asClearStr)
+	}
+
+	return nil
+}
+
 func getAlt(field reflect.StructField) (alt interface{}) {
 	if hasTag(field.Tag, "ALT") {
 		alt = field.Tag.Get("ALT")
@@ -207,6 +216,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			}
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
+			_field.AsClear = getAsClear(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
 			if tableMeta.Field(i).Tag.Get("TABLEAS") != "" {
@@ -291,6 +301,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			}
 
 			_field.AsNull = getAsNull(tableMeta.Field(i))
+			_field.AsClear = getAsClear(tableMeta.Field(i))
 			_field.Alt = getAlt(tableMeta.Field(i))
 			_field.Self = tableMeta.Field(i).Tag.Get("SELF")
 			if tableMeta.Field(i).Tag.Get("TABLEAS") != "" {
