@@ -473,11 +473,25 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 						cV.Type = "json"
 						if _field.JsonCast {
 							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', CAST(? AS JSON)", _field.Json))
+						} else if _field.JsonMerge != "" {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE(%s, ?)", _field.Json, _field.JsonMerge))
+						} else if _field.JsonMergePreserve != "" {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PRESERVE(%s, ?)", _field.Json, _field.JsonMergePreserve))
+						} else if _field.JsonMergePatch != "" {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PATCH(%s, ?)", _field.Json, _field.JsonMergePatch))
+						} else if _field.JsonArrayAppend != "" {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_ARRAY_APPEND(%s, ?)", _field.Json, _field.JsonArrayAppend))
 						} else {
 							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
 						}
+					} else if _field.JsonMerge != "" {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE(%s, ?)", _field.JsonMerge))
+					} else if _field.JsonMergePreserve != "" {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PRESERVE(%s, ?)", _field.JsonMergePreserve))
 					} else if _field.JsonMergePatch != "" {
 						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PATCH(%s, ?)", _field.JsonMergePatch))
+					} else if _field.JsonArrayAppend != "" {
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_ARRAY_APPEND(%s, ?)", _field.JsonArrayAppend))
 					} else {
 						cV.Stmt = append(cV.Stmt, "?")
 					}

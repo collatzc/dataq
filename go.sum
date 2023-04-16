@@ -1,2 +1,4 @@
+github.com/collatzc/jsonl v0.1.0 h1:n2gz2egIERu2QDpVJrcVYAk+FBTNTWudyrxcfa27+xI=
+github.com/collatzc/jsonl v0.1.0/go.mod h1:nZLwFlabsSGD2dY0uz2cE3+hOnSK6dOvmS8fkyXetCE=
 github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=
 github.com/go-sql-driver/mysql v1.6.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=

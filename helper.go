@@ -229,7 +229,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.JsonCast = true
 			}
 
+			_field.JsonMerge = tableMeta.Field(i).Tag.Get("JSONMERGE")
+			_field.JsonMergePreserve = tableMeta.Field(i).Tag.Get("JSONMERGEPRESERVE")
 			_field.JsonMergePatch = tableMeta.Field(i).Tag.Get("JSONMERGEPATCH")
+			_field.JsonArrayAppend = tableMeta.Field(i).Tag.Get("JSONARRAYAPPEND")
 
 			if hasTag(tableMeta.Field(i).Tag, "INIT") {
 				_field.Init = true
@@ -314,7 +317,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.JsonCast = true
 			}
 
+			_field.JsonMerge = tableMeta.Field(i).Tag.Get("JSONMERGE")
+			_field.JsonMergePreserve = tableMeta.Field(i).Tag.Get("JSONMERGEPRESERVE")
 			_field.JsonMergePatch = tableMeta.Field(i).Tag.Get("JSONMERGEPATCH")
+			_field.JsonArrayAppend = tableMeta.Field(i).Tag.Get("JSONARRAYAPPEND")
 
 			if hasTag(tableMeta.Field(i).Tag, "INIT") {
 				_field.Init = true

@@ -1,3 +1,3 @@
 {
-	"dsn": "<username>:<password>@tcp(localhost:3306)/test?parseTime=true&multiStatements=true"
+	"dsn": "<username>:<password>@tcp(localhost:3306)/test?parseTime=true&multiStatements=true&interpolateParams=false&time_zone=UTC"
 }
