@@ -94,11 +94,14 @@ func (_s *qStruct) getRowValue(idxSlice int) (ret reflect.Value) {
 
 func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	var typeName reflect.Type
+	var thisValue reflect.Value
 	if _s.Value.Kind() != reflect.Slice {
 		typeName = _s.Value.Field(idxField).Type()
+		thisValue = _s.Value.Field(idxField)
 		ret = _s.Value.Field(idxField).Interface()
 	} else {
 		typeName = _s.Value.Index(idxArray).Field(idxField).Type()
+		thisValue = _s.Value.Index(idxArray).Field(idxField)
 		ret = _s.Value.Index(idxArray).Field(idxField).Interface()
 	}
 
@@ -109,10 +112,17 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	default:
 		switch typeName.Kind() {
 		case reflect.Map:
+			if thisValue.Len() <= 0 {
+				return "{}"
+			}
 			j, _ := json.Marshal(ret)
 			return j
 		case reflect.Slice:
+			if thisValue.Len() <= 0 {
+				return "[]"
+			}
 			j, _ := json.Marshal(ret)
+			fmt.Println("getValueInterface", fmt.Sprintf("%#v", ret), string(j))
 			return j
 		default:
 			return ret

@@ -14,7 +14,7 @@ type Person struct {
 	Name    string    `COL:"NAME" ALT:""`
 	Age     int       `COL:"AGE"`
 	Profile string    `COL:"PROFILE" ALT:"{}" JSONARRAYAPPEND:"Profile, '$'"`
-	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" INIT:""`
+	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" INIT:"[]"`
 	Created time.Time `COL:"CREATED"`
 	Omit    string    `OMIT:""`
 }
@@ -41,14 +41,14 @@ func TestJsonArrayAppend(t *testing.T) {
 	defer db.Close()
 
 	per := Person{
-		ID:      2,
+		ID:      9,
 		Name:    "P1",
 		Age:     12,
 		Profile: "[\"Log1\"]",
 	}
-	t.Log("Inert()", db.Model(per).Insert())
+	t.Error("Inert()", db.Model(per).Insert())
 
-	per.Profile = "Log5"
-	per.Log = []string{"Log6"}
+	per.Profile = "Log2"
+	per.Log = []string{"Log1"}
 	t.Error("Update()", db.Model(per).IndexWith(0).Update())
 }
