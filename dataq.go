@@ -177,3 +177,58 @@ func (c *QData) Rollback() error {
 
 	return nil
 }
+
+func (c *QData) FinAfterFuncOK(txFunc func() error) error {
+	var err error
+	if c.tx != nil {
+		defer func() {
+			if p := recover(); p != nil {
+				c.tx.Rollback()
+				panic(p)
+			} else if err != nil {
+				c.tx.Rollback()
+			} else {
+				err = c.tx.Commit()
+			}
+			c.tx = nil
+		}()
+	}
+
+	if txFunc != nil {
+		err = txFunc()
+	}
+
+	return err
+}
+
+func (c *QData) FinDefaultCommit() error {
+	var err error
+
+	if c.tx != nil {
+		if p := recover(); p != nil {
+			c.tx.Rollback()
+			panic(p)
+		} else {
+			err = c.tx.Commit()
+		}
+		c.tx = nil
+	}
+
+	return err
+}
+
+func (c *QData) FinDefaultRollback() error {
+	var err error
+
+	if c.tx != nil {
+		if p := recover(); p != nil {
+			c.tx.Rollback()
+			c.tx = nil
+			panic(p)
+		}
+		err = c.tx.Rollback()
+		c.tx = nil
+	}
+
+	return err
+}

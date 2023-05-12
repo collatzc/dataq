@@ -253,7 +253,7 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 			// return retStruct, errors.New("dataq: Data set is empty")
 			// TODO: restrict freeLength!
 			if !tableValues.CanSet() {
-				return retStruct, errors.New("dataq: underlying variable cannot be setted")
+				return retStruct, errors.New("dataq: underlying variable cannot be set")
 			}
 			retStruct.freeLength = true
 		}

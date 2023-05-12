@@ -112,17 +112,16 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	default:
 		switch typeName.Kind() {
 		case reflect.Map:
-			if thisValue.Len() <= 0 {
+			if thisValue.Len() <= 1 {
 				return "{}"
 			}
 			j, _ := json.Marshal(ret)
 			return j
 		case reflect.Slice:
-			if thisValue.Len() <= 0 {
+			if thisValue.Len() <= 1 {
 				return "[]"
 			}
 			j, _ := json.Marshal(ret)
-			fmt.Println("getValueInterface", fmt.Sprintf("%#v", ret), string(j))
 			return j
 		default:
 			return ret

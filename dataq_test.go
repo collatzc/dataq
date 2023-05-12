@@ -40,15 +40,21 @@ func TestJsonArrayAppend(t *testing.T) {
 	checkErr(err, t)
 	defer db.Close()
 
+	tx := db.Begin()
+	defer tx.FinDefaultCommit()
+
 	per := Person{
-		ID:      9,
+		ID:      1,
 		Name:    "P1",
 		Age:     12,
 		Profile: "[\"Log1\"]",
 	}
-	t.Error("Inert()", db.Model(per).Insert())
+	sqlRes := tx.Model(per).Insert()
+	err = sqlRes.Error
+	t.Log(err)
 
-	per.Profile = "Log2"
-	per.Log = []string{"Log1"}
-	t.Error("Update()", db.Model(per).IndexWith(0).Update())
+	per.Profile = "Log3"
+	per.Log = []string{"Log2"}
+	t.Fatal("Update()", tx.Model(per).IndexWith(0).Update())
+
 }
