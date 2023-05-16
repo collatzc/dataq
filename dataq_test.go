@@ -15,6 +15,7 @@ type Person struct {
 	Age     int       `COL:"AGE"`
 	Profile string    `COL:"PROFILE" ALT:"{}" JSONARRAYAPPEND:"Profile, '$'"`
 	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" INIT:"[]"`
+	Array   []string  `JSON:"Json.array" JSONCAST:""`
 	Created time.Time `COL:"CREATED"`
 	Omit    string    `OMIT:""`
 }
@@ -47,6 +48,7 @@ func TestJsonArrayAppend(t *testing.T) {
 		ID:      1,
 		Name:    "P1",
 		Age:     12,
+		Array:   []string{"A", "B"},
 		Profile: "[\"Log1\"]",
 	}
 	sqlRes := tx.Model(per).Insert()
