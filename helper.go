@@ -105,9 +105,9 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 			asNull = ConfigAsNullDateTimeFormat
 		default:
 			if field.Type.Kind() == reflect.Map {
-				asNull = []byte{0x6e, 0x75, 0x6c, 0x6c}
+				asNull = "{}"
 			} else if field.Type.Kind() == reflect.Slice {
-				asNull = []byte{0x6e, 0x75, 0x6c, 0x6c}
+				asNull = "[]"
 			}
 		}
 	} else {

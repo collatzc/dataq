@@ -129,6 +129,10 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	}
 }
 
+func (_s *qStruct) isValueEmpty(idxField, idxArray int) bool {
+	return _s.getValueInterface(idxField, idxArray) == _s.getValueEmptyValue(idxField, idxArray)
+}
+
 func (_s *qStruct) getValueEmptyValue(idxField, idxArray int) interface{} {
 	var typeName reflect.Type
 	if _s.Value.Kind() != reflect.Slice {

@@ -45,7 +45,7 @@ func TestJsonArrayAppend(t *testing.T) {
 	defer tx.FinDefaultCommit()
 
 	per := Person{
-		ID:      1,
+		ID:      13,
 		Name:    "P1",
 		Age:     12,
 		Array:   []string{"A", "B"},
@@ -56,7 +56,7 @@ func TestJsonArrayAppend(t *testing.T) {
 	t.Log(err)
 
 	per.Profile = "Log3"
-	per.Log = []string{"Log2"}
+	per.Array = []string{}
 	t.Fatal("Update()", tx.Model(per).IndexWith(0).Update())
 
 }
