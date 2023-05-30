@@ -14,7 +14,7 @@ type Person struct {
 	Name    string    `COL:"NAME" ALT:""`
 	Age     int       `COL:"AGE"`
 	Profile string    `COL:"PROFILE" ALT:"{}" JSONARRAYAPPEND:"Profile, '$'"`
-	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" INIT:"[]"`
+	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" JSONCAST:"" INIT:"[]"`
 	Array   []string  `JSON:"Json.array" JSONCAST:""`
 	Created time.Time `COL:"CREATED"`
 	Omit    string    `OMIT:""`
@@ -45,7 +45,7 @@ func TestJsonArrayAppend(t *testing.T) {
 	defer tx.FinDefaultCommit()
 
 	per := Person{
-		ID:      13,
+		ID:      14,
 		Name:    "P1",
 		Age:     12,
 		Array:   []string{"A", "B"},
@@ -55,7 +55,8 @@ func TestJsonArrayAppend(t *testing.T) {
 	err = sqlRes.Error
 	t.Log(err)
 
-	per.Profile = "Log3"
+	per.Profile = "Log4"
+	per.Log = []string{"Log3"}
 	per.Array = []string{}
 	t.Fatal("Update()", tx.Model(per).IndexWith(0).Update())
 

@@ -227,15 +227,17 @@ func (_s *qStruct) composeInsertSQL() string {
 					cV = colVal[key]
 				}
 
+				placeholder := "?"
+				if _field.JsonCast {
+					placeholder = "CAST(? AS JSON)"
+				}
+
 				if _field.Json != "" {
 					cV.Type = "json"
-					if _field.JsonCast {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', CAST(? AS JSON)", _field.Json))
-					} else {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', ?", _field.Json))
-					}
+
+					cV.Stmt = append(cV.Stmt, fmt.Sprintf("'%s', %s", _field.Json, placeholder))
 				} else {
-					cV.Stmt = append(cV.Stmt, "?")
+					cV.Stmt = append(cV.Stmt, placeholder)
 				}
 				cV.Val = append(cV.Val, _s.getValueInterface(_field.ValIdx, i))
 				colVal[key] = cV
@@ -482,31 +484,34 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 				if _field.Self != "" {
 					cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s%s", key, _field.Self))
 				} else if !isEqual(_s.getValueInterface(_field.ValIdx, 0), _field.AsNull) || _field.IgnoreNull || (_field.AsClear != nil && _field.AsClear == _s.getValueInterface(_field.ValIdx, 0)) {
+					placeholder := "?"
+					if _field.JsonCast {
+						placeholder = "CAST(? AS JSON)"
+					}
 					if _field.Json != "" {
 						cV.Type = "json"
-						if _field.JsonCast {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', CAST(? AS JSON)", _field.Json))
-						} else if _field.JsonMerge != "" {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE(%s, ?)", _field.Json, _field.JsonMerge))
+
+						if _field.JsonMerge != "" {
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE(%s, %s)", _field.Json, _field.JsonMerge, placeholder))
 						} else if _field.JsonMergePreserve != "" {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PRESERVE(%s, ?)", _field.Json, _field.JsonMergePreserve))
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PRESERVE(%s, %s)", _field.Json, _field.JsonMergePreserve, placeholder))
 						} else if _field.JsonMergePatch != "" {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PATCH(%s, ?)", _field.Json, _field.JsonMergePatch))
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PATCH(%s, %s)", _field.Json, _field.JsonMergePatch, placeholder))
 						} else if _field.JsonArrayAppend != "" {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_ARRAY_APPEND(%s, ?)", _field.Json, _field.JsonArrayAppend))
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_ARRAY_APPEND(%s, %s)", _field.Json, _field.JsonArrayAppend, placeholder))
 						} else {
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
+							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', %s", _field.Json, placeholder))
 						}
 					} else if _field.JsonMerge != "" {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE(%s, ?)", _field.JsonMerge))
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE(%s, %s)", _field.JsonMerge, placeholder))
 					} else if _field.JsonMergePreserve != "" {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PRESERVE(%s, ?)", _field.JsonMergePreserve))
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PRESERVE(%s, %s)", _field.JsonMergePreserve, placeholder))
 					} else if _field.JsonMergePatch != "" {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PATCH(%s, ?)", _field.JsonMergePatch))
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_MERGE_PATCH(%s, %s)", _field.JsonMergePatch, placeholder))
 					} else if _field.JsonArrayAppend != "" {
-						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_ARRAY_APPEND(%s, ?)", _field.JsonArrayAppend))
+						cV.Stmt = append(cV.Stmt, fmt.Sprintf("JSON_ARRAY_APPEND(%s, %s)", _field.JsonArrayAppend, placeholder))
 					} else {
-						cV.Stmt = append(cV.Stmt, "?")
+						cV.Stmt = append(cV.Stmt, placeholder)
 					}
 
 					if _field.AsClear != nil && _field.AsClear == _s.getValueInterface(_field.ValIdx, 0) {
