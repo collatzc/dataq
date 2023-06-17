@@ -270,6 +270,10 @@ func (stat *QStat) Exec() *QResult {
 		fmt.Println("Model SQL: " + _sql)
 	}
 
+	if stat.dbc.debugLvl > 1 {
+		fmt.Printf("Values %#v\n", stat.sqlStruct.Values)
+	}
+
 	switch stat.Method {
 	case sqlBatchInsert:
 		fallthrough
@@ -368,10 +372,6 @@ func (stat *QStat) Exec() *QResult {
 				return &QResult{
 					Error: err,
 				}
-			}
-
-			if stat.dbc.debugLvl > 2 {
-				fmt.Printf("Values %#v\n", stat.sqlStruct.Values)
 			}
 
 			rawRows, err = preparedStmt.Query(stat.sqlStruct.Values...)
