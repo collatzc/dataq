@@ -241,7 +241,7 @@ func (stat *QStat) SetModel(model interface{}) *QStat {
 	stat.Variables["$T0"] = stat.sqlStruct.Table
 	panicErrHandle(err)
 
-	if stat.dbc.debugLvl > 3 {
+	if stat.dbc.config.DebugLvl > 3 {
 		fmt.Println("=== Init Model Struct ===")
 		fmt.Println(stat.sqlStruct)
 	}
@@ -266,11 +266,11 @@ func (stat *QStat) Exec() *QResult {
 		_sql = strings.ReplaceAll(_sql, _replace, fmt.Sprintf("`%s`", _new))
 	}
 
-	if stat.dbc.debugLvl > 0 {
+	if stat.dbc.config.DebugLvl > 0 {
 		fmt.Println("Model SQL: " + _sql)
 	}
 
-	if stat.dbc.debugLvl > 1 {
+	if stat.dbc.config.DebugLvl > 1 {
 		fmt.Printf("Values %#v\n", stat.sqlStruct.Values)
 	}
 
@@ -339,7 +339,7 @@ func (stat *QStat) Exec() *QResult {
 				Error: err,
 			}
 		}
-		if stat.dbc.debugLvl > 0 {
+		if stat.dbc.config.DebugLvl > 0 {
 			fmt.Println("QResult: AffectedRows [", affectedRows, "] LastInsertID [", lastInsertID, "]")
 		}
 
@@ -465,7 +465,7 @@ func (stat *QStat) Exec() *QResult {
 			rowNumber++
 		}
 
-		if stat.dbc.debugLvl > 0 {
+		if stat.dbc.config.DebugLvl > 0 {
 			fmt.Println("QResult: ReturnedRows [", rowNumber, "]")
 		}
 		return &QResult{

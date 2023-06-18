@@ -7,14 +7,29 @@ import (
 	"time"
 )
 
+var (
+	DefaultConnMaxIdleTime = 5 * time.Minute
+	DefaultConnMaxLifetime = 5 * time.Minute
+	MaxIdleConns           = 128
+	MaxOpenConns           = 128
+)
+
 // QData Database Connection
 type QData struct {
 	db           QInterface
 	dbName       string
-	debugLvl     int
 	tx           *sql.Tx
 	preparedStmt *sync.Map
 	shared       *sharedConfig
+	config       Config
+}
+
+type Config struct {
+	DebugLvl        int
+	ConnMaxIdleTime time.Duration
+	ConnMaxLifetime time.Duration
+	MaxIdleConns    int
+	MaxOpenConns    int
 }
 
 type sharedConfig struct {
@@ -38,7 +53,7 @@ func Open(args ...interface{}) (dbc *QData, err error) {
 		connectString string
 		dbConn        QInterface
 		dbName        string
-		debugLvl      int
+		config        Config
 		ok            bool
 	)
 
@@ -50,11 +65,24 @@ func Open(args ...interface{}) (dbc *QData, err error) {
 
 	if lenArgs == 2 {
 		// TODO: need more params
-		if debugLvl, ok = args[1].(int); !ok {
-			debugLvl = int(args[1].(float64))
-		} else {
-			debugLvl = args[1].(int)
+		if _, ok = args[1].(float64); ok {
+			config.DebugLvl = int(args[1].(float64))
+		} else if _, ok = args[1].(Config); ok {
+			config = args[1].(Config)
 		}
+	}
+
+	if config.ConnMaxIdleTime == 0 {
+		config.ConnMaxIdleTime = DefaultConnMaxIdleTime
+	}
+	if config.ConnMaxLifetime == 0 {
+		config.ConnMaxLifetime = DefaultConnMaxLifetime
+	}
+	if config.MaxOpenConns == 0 {
+		config.MaxOpenConns = 128
+	}
+	if config.MaxIdleConns == 0 {
+		config.MaxIdleConns = 128
 	}
 
 	if d, ok := dbConn.(*sql.DB); ok {
@@ -62,16 +90,17 @@ func Open(args ...interface{}) (dbc *QData, err error) {
 			d.Close()
 			return nil, err
 		}
-		d.SetMaxOpenConns(100)
-		d.SetMaxIdleConns(80)
-		d.SetConnMaxLifetime(time.Minute * 5)
+		d.SetMaxOpenConns(config.MaxOpenConns)
+		d.SetMaxIdleConns(config.MaxIdleConns)
+		d.SetConnMaxLifetime(config.ConnMaxLifetime)
+		d.SetConnMaxIdleTime(config.ConnMaxIdleTime)
 	}
 
 	dbConn.QueryRow("SELECT DATABASE()").Scan(&dbName)
 	dbc = &QData{
-		db:       dbConn,
-		dbName:   dbName,
-		debugLvl: debugLvl,
+		db:     dbConn,
+		dbName: dbName,
+		config: config,
 		shared: &sharedConfig{
 			store:        &sync.Map{},
 			preparedStmt: map[string]*sql.Stmt{},
@@ -99,10 +128,10 @@ func (dbc *QData) Close() error {
 
 func (dbc *QData) clone() *QData {
 	newc := QData{
-		db:       dbc.db,
-		dbName:   dbc.dbName,
-		debugLvl: dbc.debugLvl,
-		shared:   dbc.shared,
+		db:     dbc.db,
+		dbName: dbc.dbName,
+		shared: dbc.shared,
+		config: dbc.config,
 	}
 
 	if dbc.tx != nil {
