@@ -103,6 +103,8 @@ func getAsNull(field reflect.StructField) (asNull interface{}) {
 			asNull = false
 		case "Time":
 			asNull = ConfigAsNullDateTimeFormat
+		case "QBool", "QFloat64", "QString", "QTime":
+			asNull = nil
 		default:
 			if field.Type.Kind() == reflect.Map {
 				asNull = "{}"

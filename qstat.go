@@ -407,6 +407,12 @@ func (stat *QStat) Exec() *QResult {
 
 			for i := range stat.sqlStruct.Fields {
 				switch rowValue.Field(i).Kind() {
+				case reflect.Bool:
+					boolVal, err := strconv.ParseBool(string(values[i]))
+					if err != nil {
+						boolVal = false
+					}
+					rowValue.Field(i).SetBool(boolVal)
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 					i64, err := strconv.ParseInt(string(values[i]), 10, rowValue.Field(i).Type().Bits())
 					if err != nil {
@@ -427,10 +433,44 @@ func (stat *QStat) Exec() *QResult {
 					}
 				case reflect.Struct:
 					// TODO: not only parse Time
-					if _type := rowValue.Field(i).Type(); _type.PkgPath() == "time" {
+					_type := rowValue.Field(i).Type()
+					switch _type.PkgPath() {
+					case "time":
 						// Need timezone and can be parsed by Javascript
 						t, _ := time.Parse(ConfigParseDateTimeFormat, string(values[i]))
 						rowValue.Field(i).Set(reflect.ValueOf(t))
+					case "github.com/collatzc/dataq":
+						switch _type.Name() {
+						case "QBool":
+							boolVal, err := strconv.ParseBool(string(values[i]))
+							if err != nil {
+								boolVal = false
+							}
+							rowValue.Field(i).Set(reflect.ValueOf(QBool{
+								Valid: true,
+								Value: boolVal,
+							}))
+						case "QFloat64":
+							f64, err := strconv.ParseFloat(string(values[i]), 64)
+							if err != nil {
+								f64 = 0.0
+							}
+							rowValue.Field(i).Set(reflect.ValueOf(QFloat64{
+								Valid: true,
+								Value: f64,
+							}))
+						case "QString":
+							rowValue.Field(i).Set(reflect.ValueOf(QString{
+								Valid: true,
+								Value: string(values[i]),
+							}))
+						case "QTime":
+							t, _ := time.Parse(ConfigParseDateTimeFormat, string(values[i]))
+							rowValue.Field(i).Set(reflect.ValueOf(QTime{
+								Valid: true,
+								Value: t,
+							}))
+						}
 					}
 				case reflect.Map:
 					var _map map[string]interface{}

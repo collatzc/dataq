@@ -109,6 +109,34 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 	switch typeName.Name() {
 	case "Time":
 		return ret.(time.Time).Format(ConfigMySQLDateTimeFormat)
+	case "QBool":
+		_val := ret.(QBool)
+		if _val.Valid {
+			return _val.Value
+		}
+
+		return nil
+	case "QFloat64":
+		_val := ret.(QFloat64)
+		if _val.Valid {
+			return _val.Value
+		}
+
+		return nil
+	case "QString":
+		_val := ret.(QString)
+		if _val.Valid {
+			return _val.Value
+		}
+
+		return nil
+	case "QTime":
+		_val := ret.(QTime)
+		if _val.Valid {
+			return _val.Value.Format(ConfigMySQLDateTimeFormat)
+		}
+
+		return nil
 	default:
 		switch typeName.Kind() {
 		case reflect.Map:
