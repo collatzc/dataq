@@ -10,14 +10,15 @@ import (
 )
 
 type Person struct {
-	ID      int64     `COL:"ID" TABLE:"Person"`
-	Name    string    `COL:"NAME" ALT:""`
-	Age     int       `COL:"AGE"`
-	Profile string    `COL:"PROFILE" ALT:"{}" JSONARRAYAPPEND:"Profile, '$'"`
-	Log     []string  `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" JSONCAST:"" INIT:"[]"`
-	Array   []string  `JSON:"Json.array" JSONCAST:""`
-	Created time.Time `COL:"CREATED"`
-	Omit    string    `OMIT:""`
+	ID      int64         `COL:"ID" TABLE:"Person"`
+	Name    dataq.QString `COL:"NAME" ALT:""`
+	Age     int           `COL:"AGE"`
+	Profile string        `COL:"PROFILE" ALT:"{}" JSONARRAYAPPEND:"Profile, '$'"`
+	Log     []string      `JSON:"Json.log" JSONMERGEPRESERVE:"Json->>'$.log'" JSONCAST:"" INIT:"[]"`
+	Array   []string      `JSON:"Json.array" JSONCAST:""`
+	QString dataq.QString `JSON:"Json.qString"`
+	Created time.Time     `COL:"CREATED"`
+	Omit    string        `OMIT:""`
 }
 
 func getDSN(t *testing.T) string {
@@ -45,8 +46,7 @@ func TestJsonArrayAppend(t *testing.T) {
 	defer tx.FinDefaultCommit()
 
 	per := Person{
-		ID:      14,
-		Name:    "P1",
+		ID:      2,
 		Age:     12,
 		Array:   []string{"A", "B"},
 		Profile: "[\"Log1\"]",
