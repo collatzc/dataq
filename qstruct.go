@@ -674,7 +674,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 						update.WriteString(" WHEN ? THEN ")
 						_s.Values = append(_s.Values, _pk)
 						if _val.Type == "json" {
-							update.WriteString(fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _column, _column, strings.Join(_val.Stmt, ", '%."), strings.Join(_val.Stmt, ",'")))
+							update.WriteString(fmt.Sprintf("IF(JSON_VALID(%s), JSON_SET(%s, '$.%s), JSON_OBJECT('%s))", _column, _column, strings.Join(_val.Stmt, ", '$."), strings.Join(_val.Stmt, ",'")))
 							_s.Values = append(_s.Values, _val.Val...)
 						} else {
 							update.WriteString(_val.Stmt[0])

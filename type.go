@@ -48,6 +48,41 @@ func (t *QBool) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+type QInt struct {
+	Value int
+	Valid bool
+}
+
+// Set the value and force to update
+func (t *QInt) Set(value int) *QInt {
+	t.Value = value
+	t.Valid = true
+
+	return t
+}
+
+func (t QInt) MarshalBinary() ([]byte, error) {
+	return json.Marshal(t.Value)
+}
+
+func (t *QInt) UnmarshalBinary(data []byte) error {
+	err := json.Unmarshal(data, &t.Value)
+	t.Valid = (err == nil)
+
+	return err
+}
+
+func (t QInt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Value)
+}
+
+func (t *QInt) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, &t.Value)
+	t.Valid = (err == nil)
+
+	return err
+}
+
 type QFloat64 struct {
 	Value float64
 	Valid bool
