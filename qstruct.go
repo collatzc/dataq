@@ -116,6 +116,13 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 		}
 
 		return nil
+	case "QInt":
+		_val := ret.(QInt)
+		if _val.Valid {
+			return _val.Value
+		}
+
+		return nil
 	case "QFloat64":
 		_val := ret.(QFloat64)
 		if _val.Valid {

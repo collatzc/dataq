@@ -450,6 +450,15 @@ func (stat *QStat) Exec() *QResult {
 								Valid: true,
 								Value: boolVal,
 							}))
+						case "QInt":
+							intVal, err := strconv.Atoi(string(values[i]))
+							if err != nil {
+								intVal = 0
+							}
+							rowValue.Field(i).Set(reflect.ValueOf(QInt{
+								Valid: true,
+								Value: intVal,
+							}))
 						case "QFloat64":
 							f64, err := strconv.ParseFloat(string(values[i]), 64)
 							if err != nil {
