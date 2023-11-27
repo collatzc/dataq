@@ -10,6 +10,20 @@ type QBool struct {
 	Valid bool
 }
 
+func NewQBool(value bool) *QBool {
+	return &QBool{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQBool(value bool) QBool {
+	return QBool{
+		Value: value,
+		Valid: true,
+	}
+}
+
 // Set the value and force to update
 func (t *QBool) Set(value bool) *QBool {
 	t.Value = value
@@ -53,6 +67,20 @@ type QInt struct {
 	Valid bool
 }
 
+func NewQInt(value int) *QInt {
+	return &QInt{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQInt(value int) QInt {
+	return QInt{
+		Value: value,
+		Valid: true,
+	}
+}
+
 // Set the value and force to update
 func (t *QInt) Set(value int) *QInt {
 	t.Value = value
@@ -86,6 +114,20 @@ func (t *QInt) UnmarshalJSON(data []byte) error {
 type QFloat64 struct {
 	Value float64
 	Valid bool
+}
+
+func NewQFloat64(value float64) *QFloat64 {
+	return &QFloat64{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQFloat64(value float64) QFloat64 {
+	return QFloat64{
+		Value: value,
+		Valid: true,
+	}
 }
 
 // Set the value and force to update
@@ -122,6 +164,20 @@ type QString struct {
 	Valid bool
 }
 
+func NewQString(value string) *QString {
+	return &QString{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQString(value string) QString {
+	return QString{
+		Value: value,
+		Valid: true,
+	}
+}
+
 // Set the value and force to update
 func (t *QString) Set(value string) *QString {
 	t.Value = value
@@ -155,6 +211,20 @@ func (t *QString) UnmarshalJSON(data []byte) error {
 type QTime struct {
 	Value time.Time
 	Valid bool
+}
+
+func NewQTime(value time.Time) *QTime {
+	return &QTime{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQTime(value time.Time) QTime {
+	return QTime{
+		Value: value,
+		Valid: true,
+	}
 }
 
 // Set the value and force to update
