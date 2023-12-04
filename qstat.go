@@ -483,22 +483,12 @@ func (stat *QStat) Exec() *QResult {
 					}
 				case reflect.Map:
 					var _map map[string]interface{}
-					err := json.Unmarshal(values[i], &_map)
-					if err != nil {
-						return &QResult{
-							Error: err,
-						}
-					}
+					json.Unmarshal(values[i], &_map)
 					rowValue.Field(i).Set(reflect.ValueOf(_map))
 				case reflect.Slice:
 					if len(values[i]) > 0 {
 						var _ValueSlice = reflect.New(rowValue.Field(i).Type())
-						err := json.Unmarshal(values[i], _ValueSlice.Interface())
-						if err != nil {
-							return &QResult{
-								Error: err,
-							}
-						}
+						json.Unmarshal(values[i], _ValueSlice.Interface())
 						rowValue.Field(i).Set(_ValueSlice.Elem())
 					} else {
 						rowValue.Field(i).Set(reflect.MakeSlice(rowValue.Field(i).Type(), 0, 0))
