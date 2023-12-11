@@ -158,6 +158,9 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 			}
 			j, _ := json.Marshal(ret)
 			return j
+		case reflect.Struct:
+			j, _ := json.Marshal(ret)
+			return j
 		default:
 			return ret
 		}

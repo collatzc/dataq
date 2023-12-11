@@ -480,6 +480,10 @@ func (stat *QStat) Exec() *QResult {
 								Value: t,
 							}))
 						}
+					default:
+						var _ValueStruct = reflect.New(rowValue.Field(i).Type())
+						json.Unmarshal(values[i], _ValueStruct.Interface())
+						rowValue.Field(i).Set(_ValueStruct.Elem())
 					}
 				case reflect.Map:
 					var _map map[string]interface{}
