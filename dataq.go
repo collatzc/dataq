@@ -261,3 +261,21 @@ func (c *QData) FinDefaultRollback() error {
 
 	return err
 }
+
+func (c *QData) QueryRowUnsafe(query string, args ...interface{}) (row *sql.Row) {
+	if c.tx != nil {
+		row = c.tx.QueryRow(query, args...)
+	} else {
+		row = c.db.QueryRow(query, args...)
+	}
+
+	return
+}
+
+func (c *QData) ExecUnsafe(query string, args ...interface{}) (sql.Result, error) {
+	if c.tx != nil {
+		return c.tx.Exec(query, args...)
+	} else {
+		return c.db.Exec(query, args...)
+	}
+}
