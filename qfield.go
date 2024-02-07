@@ -21,6 +21,7 @@ type qField struct {
 	ValIdx            int
 	IsIndex           bool
 	IgnoreNull        bool
+	PassUpdate        bool
 }
 
 func (_f qField) String() string {

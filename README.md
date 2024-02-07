@@ -58,29 +58,30 @@
 
 ### Tags
 
-| Tag               | Description                                  |
-|-------------------|----------------------------------------------|
-| `TABLE`           | The table name.                              |
-| `TABLEAS`         | The table part of field when select.         |
-| `TABLEALIAS`      | The table alias.                             |
-| `COL`             | The field name, also can be a function and with Tag `RAW`. |
-| `COLAS`           | The field alias, also can be a function and with Tag `RAW`. |
-| `INDEX`           | This field is an index.                      |
-| `INIT`            |If the value of the field is empty (0 for number, '' for string, etc.), and the field is a JSON field, at least the field will be create in the JSON document. |
-| `COUNTON`         | The value of `COUNT(x)` function.            |
-| `ASNULL`          | As NULL value.                               |
-| `ASCLEAR`         | [Update Only] The value used as to empty the field.        |
-| `ALT`             | Alternative value.                           |
-| `WHERE`           | The fixed part of `WHERE` clause.            |
-| `JOIN`            | The fixed part of `JOIN` clause.             |
-| `JSON`            | The column is assigned to a key in the json field, e.g. `JSON:"Data.name"` will be transfered as `Data->>'$.name'` in SELECT statement. |
-| `JSONCAST`        | The column will be applied `CAST(? AS JSON)` in SELECT statement. |
+| Tag                 | Description                                  |
+|---------------------|----------------------------------------------|
+| `TABLE`             | The table name.                              |
+| `TABLEAS`           | The table part of field when select.         |
+| `TABLEALIAS`        | The table alias.                             |
+| `COL`               | The field name, also can be a function and with Tag `RAW`. |
+| `COLAS`             | The field alias, also can be a function and with Tag `RAW`. |
+| `INDEX`             | This field is an index.                      |
+| `INIT`              |If the value of the field is empty (0 for number, '' for string, etc.), and the field is a JSON field, at least the field will be create in the JSON document. |
+| `COUNTON`           | The value of `COUNT(x)` function.            |
+| `ASNULL`            | As NULL value.                               |
+| `ASCLEAR`           | [Update Only] The value used as to empty the field.        |
+| `ALT`               | Alternative value.                           |
+| `WHERE`             | The fixed part of `WHERE` clause.            |
+| `JOIN`              | The fixed part of `JOIN` clause.             |
+| `JSON`              | The column is assigned to a key in the json field, e.g. `JSON:"Data.name"` will be transfered as `Data->>'$.name'` in SELECT statement. |
+| `JSONCAST`          | The column will be applied `CAST(? AS JSON)` in SELECT statement. |
 | `JSONMERGEPRESERVE` | [Update Only] Use `JSON_MERGE_PRESERVE` function to update the field. |
-| `JSONMERGEPATCH`  | [Update Only] Use `JSON_MERGE_PATCH` function to update the field. |
-| `JSONARRAYAPPEND` | [Update Only] Use `JSON_ARRAY_APPEND` function to update the field. |
-| `OMIT`            | This field will be ignored in query.|
-| `NOFROM`          | [Query only!] No `FROM` clause will be generated.|
-| `RAW`             | [Query only!] Will query with what the Tag `COL` has.|
-| `SCHEMAF`         | [CreateTable only!] the define string for the field.|
-| `SCHEMAT`         | [CreateTable only!] the define string for the table.|
-| `SELF`            | `<Field>=<Field><SELF>` (not for JOSN datatype)|
+| `JSONMERGEPATCH`    | [Update Only] Use `JSON_MERGE_PATCH` function to update the field. |
+| `JSONARRAYAPPEND`   | [Update Only] Use `JSON_ARRAY_APPEND` function to update the field. |
+| `OMIT`              | This field will be ignored in query.|
+| `PASSUPDATE`        | This field will be ignored in update query.|
+| `NOFROM`            | [Query only!] No `FROM` clause will be generated.|
+| `RAW`               | [Query only!] Will query with what the Tag `COL` has.|
+| `SCHEMAF`           | [CreateTable only!] the define string for the field.|
+| `SCHEMAT`           | [CreateTable only!] the define string for the table.|
+| `SELF`              | `<Field>=<Field><SELF>` (not for JOSN datatype)|

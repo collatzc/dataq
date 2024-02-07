@@ -510,6 +510,9 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 			cV     *columnValue
 		)
 		for _, _field := range _s.Fields {
+			if _field.PassUpdate {
+				continue
+			}
 			if !_field.IsIndex && _field.Table == _s.Table {
 				key = fmt.Sprintf("`%s`", _field.ColName)
 				if colVal[key] == nil {
@@ -640,6 +643,9 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 			var _PkVal = _s.getValueInterface(_s.Index[0].ValIdx, i)
 			ids = append(ids, fmt.Sprintf("%#v", _PkVal))
 			for _, _field := range _s.Fields {
+				if _field.PassUpdate {
+					continue
+				}
 				if !_field.IsIndex && _field.Table == _s.Table {
 					key = fmt.Sprintf("`%s`", _field.ColName)
 					if colVal[key] == nil {

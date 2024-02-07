@@ -231,6 +231,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 				_field.JsonCast = true
 			}
 
+			if hasTag(tableMeta.Field(i).Tag, "PASSUPDATE") {
+				_field.PassUpdate = true
+			}
+
 			_field.JsonMerge = tableMeta.Field(i).Tag.Get("JSONMERGE")
 			_field.JsonMergePreserve = tableMeta.Field(i).Tag.Get("JSONMERGEPRESERVE")
 			_field.JsonMergePatch = tableMeta.Field(i).Tag.Get("JSONMERGEPATCH")
@@ -317,6 +321,10 @@ func analyseStruct(data interface{}) (retStruct qStruct, err error) {
 
 			if hasTag(tableMeta.Field(i).Tag, "JSONCAST") {
 				_field.JsonCast = true
+			}
+
+			if hasTag(tableMeta.Field(i).Tag, "PASSUPDATE") {
+				_field.PassUpdate = true
 			}
 
 			_field.JsonMerge = tableMeta.Field(i).Tag.Get("JSONMERGE")
