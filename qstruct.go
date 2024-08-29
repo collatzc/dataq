@@ -105,7 +105,7 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 		ret = _s.Value.Index(idxArray).Field(idxField).Interface()
 	}
 
-	// TODO: uint output 0x00
+	// NOTE: uint output 0x00
 	switch typeName.Name() {
 	case "Time":
 		return ret.(time.Time).Format(ConfigMySQLDateTimeFormat)
@@ -134,6 +134,18 @@ func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
 		_val := ret.(QString)
 		if _val.Valid {
 			return _val.Value
+		}
+
+		return nil
+	case "QStrings":
+		_val := ret.(QStrings)
+		if _val.Valid {
+			if len(_val.Value) < 1 {
+				return "[]"
+			}
+
+			d, _ := json.Marshal(_val.Value)
+			return d
 		}
 
 		return nil

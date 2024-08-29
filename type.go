@@ -208,6 +208,55 @@ func (t *QString) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+type QStrings struct {
+	Value []string
+	Valid bool
+}
+
+func NewQStrings(value []string) *QStrings {
+	return &QStrings{
+		Value: value,
+		Valid: true,
+	}
+}
+
+func InitQStrings(value []string) QStrings {
+	return QStrings{
+		Value: value,
+		Valid: true,
+	}
+}
+
+// Set the value and force to update
+func (t *QStrings) Set(value []string) *QStrings {
+	t.Value = value
+	t.Valid = true
+
+	return t
+}
+
+func (t QStrings) MarshalBinary() ([]byte, error) {
+	return json.Marshal(t.Value)
+}
+
+func (t *QStrings) UnmarshalBinary(data []byte) error {
+	err := json.Unmarshal(data, &t.Value)
+	t.Valid = (err == nil)
+
+	return err
+}
+
+func (t QStrings) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Value)
+}
+
+func (t *QStrings) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, &t.Value)
+	t.Valid = (err == nil)
+
+	return err
+}
+
 type QTime struct {
 	Value time.Time
 	Valid bool
