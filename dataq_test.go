@@ -56,12 +56,9 @@ func TestJsonArrayAppend(t *testing.T) {
 	defer tx.FinDefaultCommit()
 
 	per := Person{
-		ID:      3,
-		Age:     12,
-		Profile: "[\"Log1\"]",
-		Array:   dataq.InitQStrings([]string{"A", "C"}),
+		ID: 3,
 	}
-	sqlRes := tx.Model(per).Insert()
+	sqlRes := tx.Model(&per).Where("AND", "ID=?", per.ID).Query()
 	err = sqlRes.Error
 	t.Log(err)
 

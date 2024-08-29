@@ -473,6 +473,20 @@ func (stat *QStat) Exec() *QResult {
 								Valid: true,
 								Value: string(values[i]),
 							}))
+						case "QStrings":
+							if len(values[i]) > 0 {
+								var _ValueSlice = make([]string, len(values[i]))
+								json.Unmarshal(values[i], &_ValueSlice)
+								rowValue.Field(i).Set(reflect.ValueOf(QStrings{
+									Valid: true,
+									Value: _ValueSlice,
+								}))
+							} else {
+								rowValue.Field(i).Set(reflect.ValueOf(QStrings{
+									Valid: false,
+									Value: []string{},
+								}))
+							}
 						case "QTime":
 							t, _ := time.Parse(ConfigParseDateTimeFormat, string(values[i]))
 							rowValue.Field(i).Set(reflect.ValueOf(QTime{
