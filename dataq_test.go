@@ -9,15 +9,17 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// CREATE TABLE IF NOT EXISTS Person (
-// 	ID INT(5) AUTO_INCREMENT,
-// 	NAME VARCHAR(50) DEFAULT '',
-// 	AGE TINYINT(2) DEFAULT 0,
-// 	PROFILE JSON,
-// 	Json JSON,
-// 	CREATED DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-// 	PRIMARY KEY (ID)
-// ) ENGINE=InnoDB;
+/**
+CREATE TABLE IF NOT EXISTS Person (
+ 	ID INT(5) AUTO_INCREMENT,
+ 	NAME VARCHAR(50) DEFAULT '',
+ 	AGE TINYINT(2) DEFAULT 0,
+ 	PROFILE JSON,
+ 	Json JSON,
+ 	CREATED DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ 	PRIMARY KEY (ID)
+) ENGINE=InnoDB;
+*/
 
 type Person struct {
 	ID      int64          `COL:"ID" TABLE:"Person"`
@@ -58,7 +60,7 @@ func TestJsonArrayAppend(t *testing.T) {
 	per := Person{
 		ID: 3,
 	}
-	sqlRes := tx.Model(&per).Where("AND", "ID=?", per.ID).Query()
+	sqlRes := tx.Model(&per).PrepareNext(true).Where("AND", "ID=?", per.ID).Query()
 	err = sqlRes.Error
 	t.Log(err)
 

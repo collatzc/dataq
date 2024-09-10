@@ -47,7 +47,7 @@ const LockForUpdateSkipLocked = "UPDATE SKIP LOCKED"
 const ConfigMySQLDateTimeFormat = "2006-01-02 15:04:05.000"
 const ConfigAsNullDateTimeFormat = "0001-01-01 00:00:00.000"
 
-var ConfigParseDateTimeFormat = "2006-01-02 15:04:05.000"
+const ConfigParseDateTimeFormat = "2006-01-02 15:04:05.000"
 
 func (stat *QStat) String() string {
 	return fmt.Sprintf("Query Statement {\n\tMethod:\t%v\n\tsqlStruct:\t%v\n\tGroup:\t%v\n\tHaving:\t%v\n\tOrder:\t%v\nRowCount:\t%v\nOffset:\t%v\n}\n", stat.Method, stat.sqlStruct, stat.GroupS, stat.HavingS, stat.OrderS, stat.RowLimit, stat.BeginOffset)
@@ -266,7 +266,7 @@ func (stat *QStat) Exec() *QResult {
 		_sql = strings.ReplaceAll(_sql, _replace, fmt.Sprintf("`%s`", _new))
 	}
 
-	if stat.dbc.config.DebugLvl > 0 {
+	if stat.dbc.config.DebugLvl > 2 {
 		fmt.Println("Model SQL: " + _sql)
 	}
 
@@ -300,12 +300,12 @@ func (stat *QStat) Exec() *QResult {
 
 		if stat.preparedStmt {
 			preparedStmt, err := stat.sqlPrepare(_sql)
-
 			if err != nil {
 				return &QResult{
 					Error: err,
 				}
 			}
+			// defer preparedStmt.Close()
 
 			rawResult, err = preparedStmt.Exec(stat.sqlStruct.Values...)
 			if err != nil {
@@ -373,6 +373,7 @@ func (stat *QStat) Exec() *QResult {
 					Error: err,
 				}
 			}
+			// defer preparedStmt.Close()
 
 			rawRows, err = preparedStmt.Query(stat.sqlStruct.Values...)
 			if err != nil {
@@ -536,6 +537,7 @@ func (stat *QStat) Exec() *QResult {
 				res.Error = err
 				return &res
 			}
+			// defer preparedStmt.Close()
 
 			preparedStmt.QueryRow(stat.sqlStruct.Values...).Scan(&res.ReturnedRows)
 		} else {
@@ -740,45 +742,46 @@ func (stat *QStat) sqlQuery(_sql string, args ...interface{}) (rawRows *sql.Rows
 }
 
 func (stat *QStat) sqlPrepare(_sql string) (preparedStmt *sql.Stmt, err error) {
-	if stat.dbc.preparedStmt != nil {
-		if stmt, ok := stat.dbc.preparedStmt.Load(_sql); ok {
-			preparedStmt = stmt.(*sql.Stmt)
-			return
+	if _stmt, ok := stat.dbc.preparedStmt.Load(_sql); ok {
+		stmt := _stmt.(*sql.Stmt)
+
+		if stat.dbc.tx != nil {
+			preparedStmt = stat.dbc.tx.Stmt(stmt)
+		} else {
+			preparedStmt = stmt
 		}
+
+		return
 	}
 
 	stat.dbc.shared.mux.RLock()
 	if stmt, ok := stat.dbc.shared.preparedStmt[_sql]; ok {
 		stat.dbc.shared.mux.RUnlock()
+
 		if stat.dbc.tx != nil {
 			preparedStmt = stat.dbc.tx.Stmt(stmt)
-			stat.dbc.preparedStmt.Store(_sql, preparedStmt)
 		} else {
 			preparedStmt = stmt
 		}
+
 		return
 	}
 	stat.dbc.shared.mux.RUnlock()
 
-	stat.dbc.shared.mux.Lock()
-	if stmt, ok := stat.dbc.shared.preparedStmt[_sql]; ok {
-		stat.dbc.shared.mux.Unlock()
-		if stat.dbc.tx != nil {
-			preparedStmt = stat.dbc.tx.Stmt(stmt)
-		} else {
-			preparedStmt = stmt
-		}
+	if stat.dbc.tx != nil {
+		preparedStmt, err = stat.dbc.tx.Prepare(_sql)
+
+		stat.dbc.preparedStmt.Store(_sql, preparedStmt)
+
 		return
 	}
 
 	preparedStmt, err = stat.dbc.db.Prepare(_sql)
 	if err == nil {
+		stat.dbc.shared.mux.Lock()
 		stat.dbc.shared.preparedStmt[_sql] = preparedStmt
-	}
-	stat.dbc.shared.mux.Unlock()
+		stat.dbc.shared.mux.Unlock()
 
-	if err == nil && stat.dbc.tx != nil {
-		preparedStmt = stat.dbc.tx.Stmt(preparedStmt)
 		stat.dbc.preparedStmt.Store(_sql, preparedStmt)
 	}
 

@@ -2,6 +2,7 @@ package dataq
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -62,6 +63,10 @@ func (t *QBool) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+func (t *QBool) String() string {
+	return fmt.Sprintf("%t", t.Value)
+}
+
 type QInt struct {
 	Value int
 	Valid bool
@@ -111,6 +116,10 @@ func (t *QInt) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+func (t *QInt) String() string {
+	return fmt.Sprintf("%d", t.Value)
+}
+
 type QFloat64 struct {
 	Value float64
 	Valid bool
@@ -157,6 +166,10 @@ func (t *QFloat64) UnmarshalJSON(data []byte) error {
 	t.Valid = (err == nil)
 
 	return err
+}
+
+func (t *QFloat64) String() string {
+	return fmt.Sprintf("%f", t.Value)
 }
 
 type QString struct {
@@ -208,6 +221,10 @@ func (t *QString) UnmarshalJSON(data []byte) error {
 	return err
 }
 
+func (t *QString) String() string {
+	return t.Value
+}
+
 type QStrings struct {
 	Value []string
 	Valid bool
@@ -255,6 +272,10 @@ func (t *QStrings) UnmarshalJSON(data []byte) error {
 	t.Valid = (err == nil)
 
 	return err
+}
+
+func (t *QStrings) String() string {
+	return fmt.Sprintf("%v", t.Value)
 }
 
 type QTime struct {
@@ -315,4 +336,8 @@ func (t *QTime) UnmarshalJSON(data []byte) error {
 	t.Valid = (err == nil)
 
 	return err
+}
+
+func (t *QTime) String() string {
+	return t.Value.Format(ConfigParseDateTimeFormat)
 }

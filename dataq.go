@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var (
+const (
 	DefaultConnMaxIdleTime = 5 * time.Minute
 	DefaultConnMaxLifetime = 5 * time.Minute
 	MaxIdleConns           = 128
@@ -128,15 +128,15 @@ func (dbc *QData) Close() error {
 
 func (dbc *QData) clone() *QData {
 	newc := QData{
-		db:     dbc.db,
-		dbName: dbc.dbName,
-		shared: dbc.shared,
-		config: dbc.config,
+		db:           dbc.db,
+		dbName:       dbc.dbName,
+		shared:       dbc.shared,
+		config:       dbc.config,
+		preparedStmt: &sync.Map{},
 	}
 
 	if dbc.tx != nil {
 		newc.tx = dbc.tx
-		newc.preparedStmt = dbc.preparedStmt
 	}
 
 	return &newc
