@@ -63,7 +63,7 @@ func (t *QBool) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QBool) String() string {
+func (t QBool) String() string {
 	return fmt.Sprintf("%t", t.Value)
 }
 
@@ -116,7 +116,7 @@ func (t *QInt) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QInt) String() string {
+func (t QInt) String() string {
 	return fmt.Sprintf("%d", t.Value)
 }
 
@@ -168,7 +168,7 @@ func (t *QFloat64) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QFloat64) String() string {
+func (t QFloat64) String() string {
 	return fmt.Sprintf("%f", t.Value)
 }
 
@@ -221,7 +221,7 @@ func (t *QString) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QString) String() string {
+func (t QString) String() string {
 	return t.Value
 }
 
@@ -274,7 +274,7 @@ func (t *QStrings) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QStrings) String() string {
+func (t QStrings) String() string {
 	return fmt.Sprintf("%v", t.Value)
 }
 
@@ -338,6 +338,6 @@ func (t *QTime) UnmarshalJSON(data []byte) error {
 	return err
 }
 
-func (t *QTime) String() string {
+func (t QTime) String() string {
 	return t.Value.Format(ConfigParseDateTimeFormat)
 }
