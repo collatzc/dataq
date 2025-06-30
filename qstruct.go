@@ -18,50 +18,51 @@ type qStruct struct {
 	Length                int
 	Index                 []qField
 	Fields                []qField
+	WithStat              string
 	Joins                 []string
 	Wheres                []string
 	Sets                  []qClause
 	Value                 *reflect.Value
-	Values                []interface{}
+	Values                []any
 	QueryOnly             bool
-	BatchValue            []map[string]interface{}
+	BatchValue            []map[string]any
 	Schema                []string
 	OnDuplicateKeyUpdate  bool
-	DuplicateKeyUpdateCol map[string]interface{}
+	DuplicateKeyUpdateCol map[string]any
 	freeLength            bool
 }
 
 type qClause struct {
 	Operator string
 	Template string
-	Values   []interface{}
+	Values   []any
 }
 
 type columnMapValue map[string]*columnValue
 
-type columnMapPkValues map[string]map[interface{}]*columnValue
+type columnMapPkValues map[string]map[any]*columnValue
 
 type columnValue struct {
 	Stmt []string
-	Pk   interface{}
-	Val  []interface{}
+	Pk   any
+	Val  []any
 	Type string
 }
 
 var (
 	columnValuePool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return new(columnValue)
 		},
 	}
 )
 
-func (_s *qStruct) AppendBatchValue(val map[string]interface{}) {
+func (_s *qStruct) AppendBatchValue(val map[string]any) {
 	_s.BatchValue = append(_s.BatchValue, val)
 }
 
 func (_s *qStruct) ClearBatchValue() {
-	_s.BatchValue = make([]map[string]interface{}, 0)
+	_s.BatchValue = make([]map[string]any, 0)
 }
 
 func (_s *qStruct) IsBatchValueEmpty() bool {
@@ -92,7 +93,7 @@ func (_s *qStruct) getRowValue(idxSlice int) (ret reflect.Value) {
 	return
 }
 
-func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret interface{}) {
+func (_s *qStruct) getValueInterface(idxField, idxArray int) (ret any) {
 	var typeName reflect.Type
 	var thisValue reflect.Value
 	if _s.Value.Kind() != reflect.Slice {
@@ -183,7 +184,7 @@ func (_s *qStruct) isValueEmpty(idxField, idxArray int) bool {
 	return _s.getValueInterface(idxField, idxArray) == _s.getValueEmptyValue(idxField, idxArray)
 }
 
-func (_s *qStruct) getValueEmptyValue(idxField, idxArray int) interface{} {
+func (_s *qStruct) getValueEmptyValue(idxField, idxArray int) any {
 	var typeName reflect.Type
 	if _s.Value.Kind() != reflect.Slice {
 		typeName = _s.Value.Field(idxField).Type()
@@ -263,7 +264,7 @@ func (_s *qStruct) composeInsertSQL() string {
 		val    []string
 		cV     *columnValue
 	)
-	_s.Values = make([]interface{}, 0, _s.Length*len(_s.Fields))
+	_s.Values = make([]any, 0, _s.Length*len(_s.Fields))
 	for i := 0; i < _s.Length; i++ {
 		for _, _field := range _s.Fields {
 			// ignore `TABLE`. prefix
@@ -272,7 +273,7 @@ func (_s *qStruct) composeInsertSQL() string {
 				if colVal[key] == nil {
 					cV = _s.AllocColumnValue()
 					cV.Stmt = make([]string, 0)
-					cV.Val = make([]interface{}, 0)
+					cV.Val = make([]any, 0)
 				} else {
 					cV = colVal[key]
 				}
@@ -404,9 +405,9 @@ func (_s *qStruct) composeSelectSQL(filters []qClause) string {
 		sql strings.Builder
 	)
 
-	_s.Values = make([]interface{}, 0)
+	_s.Values = make([]any, 0)
 
-	sql.WriteString(fmt.Sprintf("SELECT %s", _s.composeSelectFieldSQL()))
+	sql.WriteString(fmt.Sprintf("%s SELECT %s", _s.composeWithStatement(), _s.composeSelectFieldSQL()))
 
 	if _s.Table != "" {
 		sql.WriteString(fmt.Sprintf(" FROM `%s`", _s.Table))
@@ -468,6 +469,14 @@ func (_s *qStruct) composeCountSQL(filters []qClause) string {
 	return sql.String()
 }
 
+func (s *qStruct) composeWithStatement() string {
+	var sql strings.Builder
+	if s.WithStat != "" {
+		sql.WriteString(s.WithStat)
+	}
+	return sql.String()
+}
+
 func (s *qStruct) composeWhereIndexCondition(filters []qClause) string {
 	var (
 		condition = make([]string, 0, 3)
@@ -514,7 +523,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 		condition []string
 		hasLimit  = limit != 0
 	)
-	_s.Values = make([]interface{}, 0)
+	_s.Values = make([]any, 0)
 	// for i := 0; i < _s.Length; i++ {
 	if _s.Length == 1 {
 		var (
@@ -661,7 +670,7 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 				if !_field.IsIndex && _field.Table == _s.Table {
 					key = fmt.Sprintf("`%s`", _field.ColName)
 					if colVal[key] == nil {
-						colVal[key] = make(map[interface{}]*columnValue)
+						colVal[key] = make(map[any]*columnValue)
 					}
 					if colVal[key][_PkVal] == nil {
 						cV = _s.AllocColumnValue()
@@ -805,7 +814,7 @@ func (_s *qStruct) composeCreateTableSQL() string {
 	return sql.String()
 }
 
-func (s *qStruct) GetValues() []interface{} {
+func (s *qStruct) GetValues() []any {
 	return s.Values
 }
 
@@ -817,7 +826,7 @@ func (c qClause) String() string {
 	return fmt.Sprintf("\tQuery Clause: {\n\t\tOperator:\t%v\n\t\tTemplate:\t%v\n\t\tValues:\t%v\n\t}\n", c.Operator, c.Template, c.Values)
 }
 
-func ClearValue(v interface{}) {
+func ClearValue(v any) {
 	p := reflect.ValueOf(v).Elem()
 	p.Set(reflect.Zero(p.Type()))
 }

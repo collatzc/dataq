@@ -117,7 +117,7 @@ func (stat *QStat) Join(joins ...string) *QStat {
 }
 
 // Where ...
-func (stat *QStat) Where(operator, template string, vals ...interface{}) *QStat {
+func (stat *QStat) Where(operator, template string, vals ...any) *QStat {
 	if strings.Contains(template, ",,,,") {
 		_values := make([]string, len(vals))
 		for _idx := range _values {
@@ -135,7 +135,7 @@ func (stat *QStat) Where(operator, template string, vals ...interface{}) *QStat 
 	return stat
 }
 
-func (stat *QStat) Set(template string, vals ...interface{}) *QStat {
+func (stat *QStat) Set(template string, vals ...any) *QStat {
 	stat.sqlStruct.Sets = append(stat.sqlStruct.Sets, qClause{
 		Template: template,
 		Values:   vals,
@@ -153,6 +153,17 @@ func (stat *QStat) ClearWhere() *QStat {
 
 func (stat *QStat) Self(n int, param string) *QStat {
 	stat.sqlStruct.Fields[n].Self = param
+
+	return stat
+}
+
+// With only support SELECT, UPDATE, DELETE
+func (stat *QStat) With(with string) *QStat {
+	if stat.sqlStruct.WithStat != "" {
+		stat.sqlStruct.WithStat = fmt.Sprintf("%s, %s", stat.sqlStruct.WithStat, with)
+	} else {
+		stat.sqlStruct.WithStat = fmt.Sprintf("WITH %s", with)
+	}
 
 	return stat
 }
@@ -213,7 +224,7 @@ func (stat *QStat) SetBatchMode(val bool) *QStat {
 
 // SetOnDuplicateKeyUpdateNCol is the Setter of the OnDuplicateKeyUpdate and DuplicateKeyUpdateCol
 // colDefin := "<col>": "<col_define>" will be handled as RAW
-func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]interface{}) *QStat {
+func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]any) *QStat {
 	stat.sqlStruct.OnDuplicateKeyUpdate = val
 	stat.sqlStruct.DuplicateKeyUpdateCol = colDefine
 
@@ -221,7 +232,7 @@ func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]in
 }
 
 // AppendBatchValue append the maps-type value when batch mode enabled
-func (stat *QStat) AppendBatchValue(val map[string]interface{}) *QStat {
+func (stat *QStat) AppendBatchValue(val map[string]any) *QStat {
 	stat.sqlStruct.AppendBatchValue(val)
 
 	return stat
@@ -234,7 +245,7 @@ func (stat *QStat) QueryLockFor(lockType string) *QStat {
 }
 
 // SetModel will only analyse the model without query to database
-func (stat *QStat) SetModel(model interface{}) *QStat {
+func (stat *QStat) SetModel(model any) *QStat {
 	sqlStruct, err := analyseStruct(model)
 	stat.sqlStruct = sqlStruct
 	stat.Variables = map[string]string{}
@@ -250,7 +261,7 @@ func (stat *QStat) SetModel(model interface{}) *QStat {
 }
 
 // Model changes the model
-func (stat *QStat) Model(model interface{}) *QStat {
+func (stat *QStat) Model(model any) *QStat {
 	stat.SetModel(model)
 
 	return stat
@@ -356,11 +367,11 @@ func (stat *QStat) Exec() *QResult {
 
 		var (
 			nField  = len(stat.sqlStruct.Fields)
-			tmpDS   []interface{}
+			tmpDS   []any
 			rawRows *sql.Rows
 		)
 
-		tmpDS = make([]interface{}, nField)
+		tmpDS = make([]any, nField)
 		values := make([]sql.RawBytes, nField)
 		for i := 0; i < nField; i++ {
 			tmpDS[i] = &values[i]
@@ -501,7 +512,7 @@ func (stat *QStat) Exec() *QResult {
 						rowValue.Field(i).Set(_ValueStruct.Elem())
 					}
 				case reflect.Map:
-					var _map map[string]interface{}
+					var _map map[string]any
 					json.Unmarshal(values[i], &_map)
 					rowValue.Field(i).Set(reflect.ValueOf(_map))
 				case reflect.Slice:
@@ -721,7 +732,7 @@ func (stat *QStat) CreateTable() *QResult {
 	return stat.Exec()
 }
 
-func (stat *QStat) sqlExec(_sql string, args ...interface{}) (rawResult sql.Result, err error) {
+func (stat *QStat) sqlExec(_sql string, args ...any) (rawResult sql.Result, err error) {
 	if stat.dbc.tx != nil {
 		rawResult, err = stat.dbc.tx.Exec(_sql, args...)
 	} else {
@@ -731,7 +742,7 @@ func (stat *QStat) sqlExec(_sql string, args ...interface{}) (rawResult sql.Resu
 	return
 }
 
-func (stat *QStat) sqlQuery(_sql string, args ...interface{}) (rawRows *sql.Rows, err error) {
+func (stat *QStat) sqlQuery(_sql string, args ...any) (rawRows *sql.Rows, err error) {
 	if stat.dbc.tx != nil {
 		rawRows, err = stat.dbc.tx.Query(_sql, args...)
 	} else {
@@ -788,7 +799,7 @@ func (stat *QStat) sqlPrepare(_sql string) (preparedStmt *sql.Stmt, err error) {
 	return
 }
 
-func (stat *QStat) QueryRowUnsafe(query string, args ...interface{}) (row *sql.Row) {
+func (stat *QStat) QueryRowUnsafe(query string, args ...any) (row *sql.Row) {
 	if stat.dbc.tx != nil {
 		row = stat.dbc.tx.QueryRow(query, args...)
 	} else {
@@ -798,7 +809,7 @@ func (stat *QStat) QueryRowUnsafe(query string, args ...interface{}) (row *sql.R
 	return
 }
 
-func (stat *QStat) ExecUnsafe(query string, args ...interface{}) (sql.Result, error) {
+func (stat *QStat) ExecUnsafe(query string, args ...any) (sql.Result, error) {
 	if stat.dbc.tx != nil {
 		return stat.dbc.tx.Exec(query, args...)
 	} else {
