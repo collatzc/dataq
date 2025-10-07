@@ -44,7 +44,7 @@ type dConnCloseI interface {
 
 // Open MySQL Connection
 // Open(connectionString, debugLevel)
-func Open(args ...interface{}) (dbc *QData, err error) {
+func Open(args ...any) (dbc *QData, err error) {
 	lenArgs := len(args)
 	if lenArgs == 0 {
 		err = errors.New("dataq: invalid database source")
@@ -158,7 +158,7 @@ func (dbc *QData) SQLDB() QInterface {
 }
 
 // Model returns a qStat object with default method SQLSelect
-func (dbc *QData) Model(model interface{}) *QStat {
+func (dbc *QData) Model(model any) *QStat {
 	stat := QStat{
 		dbc:          dbc.clone(),
 		preparedStmt: false,
@@ -262,7 +262,7 @@ func (c *QData) FinDefaultRollback() error {
 	return err
 }
 
-func (c *QData) QueryUnsafe(query string, args ...interface{}) (*sql.Rows, error) {
+func (c *QData) QueryUnsafe(query string, args ...any) (*sql.Rows, error) {
 	if c.tx != nil {
 		return c.tx.Query(query, args...)
 	} else {
@@ -270,7 +270,7 @@ func (c *QData) QueryUnsafe(query string, args ...interface{}) (*sql.Rows, error
 	}
 }
 
-func (c *QData) QueryRowUnsafe(query string, args ...interface{}) (row *sql.Row) {
+func (c *QData) QueryRowUnsafe(query string, args ...any) (row *sql.Row) {
 	if c.tx != nil {
 		row = c.tx.QueryRow(query, args...)
 	} else {
@@ -280,7 +280,7 @@ func (c *QData) QueryRowUnsafe(query string, args ...interface{}) (row *sql.Row)
 	return
 }
 
-func (c *QData) ExecUnsafe(query string, args ...interface{}) (sql.Result, error) {
+func (c *QData) ExecUnsafe(query string, args ...any) (sql.Result, error) {
 	if c.tx != nil {
 		return c.tx.Exec(query, args...)
 	} else {

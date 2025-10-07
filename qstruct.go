@@ -479,12 +479,17 @@ func (s *qStruct) composeWithStatement() string {
 
 func (s *qStruct) composeWhereIndexCondition(filters []qClause) string {
 	var (
-		condition = make([]string, 0, 3)
+		condition = make([]string, 0, 10)
 	)
+
+	if s.hasIndex() {
+		condition = append(condition, fmt.Sprintf("(%s)", s.getIndexSQL()))
+	}
 
 	if s.hasWheres() {
 		condition = append(condition, fmt.Sprintf("(%s)", strings.Join(s.Wheres, " AND ")))
 	}
+
 	if len(filters) != 0 {
 		var sqlFilter strings.Builder
 		sqlFilter.WriteByte('(')
@@ -497,9 +502,6 @@ func (s *qStruct) composeWhereIndexCondition(filters []qClause) string {
 		}
 		sqlFilter.WriteByte(')')
 		condition = append(condition, sqlFilter.String())
-	}
-	if s.hasIndex() {
-		condition = append(condition, fmt.Sprintf("(%s)", s.getIndexSQL()))
 	}
 
 	return strings.Join(condition, " AND ")
@@ -682,8 +684,19 @@ func (_s *qStruct) composeUpdateSQL(filters []qClause, limit int) string {
 					cV.Pk = _PkVal
 					if !isEqual(_s.getValueInterface(_field.ValIdx, i), _field.AsNull) {
 						if _field.Json != "" {
+							placeholder := "?"
+							if _field.JsonCast {
+								placeholder = "CAST(? AS JSON)"
+							}
+
 							cV.Type = "json"
-							cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', ?", _field.Json))
+							if _field.JsonMerge != "" {
+								cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE(%s, %s)", _field.Json, _field.JsonMerge, placeholder))
+							} else if _field.JsonMergePreserve != "" {
+								cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', JSON_MERGE_PRESERVE(%s, %s)", _field.Json, _field.JsonMergePreserve, placeholder))
+							} else {
+								cV.Stmt = append(cV.Stmt, fmt.Sprintf("%s', %s", _field.Json, placeholder))
+							}
 						} else {
 							cV.Stmt = append(cV.Stmt, "?")
 						}

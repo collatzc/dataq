@@ -60,7 +60,10 @@ func TestJsonArrayAppend(t *testing.T) {
 	per := Person{
 		ID: 3,
 	}
-	sqlRes := tx.Model(&per).PrepareNext(true).Where("AND", "ID=?", per.ID).Query()
+	_m := tx.Model(&per).PrepareNext(true).Where("AND", "ID=?", per.ID)
+	_m.SetPreparedStmt(false)
+	t.Log(_m.ComposeSelectSQL())
+	sqlRes := _m.Query()
 	err = sqlRes.Error
 	t.Log(err)
 

@@ -116,7 +116,8 @@ func (stat *QStat) Join(joins ...string) *QStat {
 	return stat
 }
 
-// Where ...
+// Where sets the conditions for the query
+// It supports multiple values for the same field using the `,,,` placeholder
 func (stat *QStat) Where(operator, template string, vals ...any) *QStat {
 	if strings.Contains(template, ",,,,") {
 		_values := make([]string, len(vals))
@@ -222,6 +223,12 @@ func (stat *QStat) SetBatchMode(val bool) *QStat {
 	return stat
 }
 
+func (stat *QStat) SetPreparedStmt(val bool) *QStat {
+	stat.preparedStmt = val
+
+	return stat
+}
+
 // SetOnDuplicateKeyUpdateNCol is the Setter of the OnDuplicateKeyUpdate and DuplicateKeyUpdateCol
 // colDefin := "<col>": "<col_define>" will be handled as RAW
 func (stat *QStat) SetOnDuplicateKeyUpdateNCol(val bool, colDefine map[string]any) *QStat {
@@ -242,6 +249,10 @@ func (stat *QStat) QueryLockFor(lockType string) *QStat {
 	stat.LockFor = lockType
 
 	return stat
+}
+
+func (s *QStat) ComposeSelectSQL() string {
+	return s.sqlStruct.composeSelectSQL(s.Filters)
 }
 
 // SetModel will only analyse the model without query to database
