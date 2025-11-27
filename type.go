@@ -252,6 +252,18 @@ func (t *QStrings) Set(value []string) *QStrings {
 	return t
 }
 
+func (t *QStrings) RemoveIndex(idx int) {
+	t.Value = append(t.Value[:idx], t.Value[idx+1:]...)
+}
+
+func (t *QStrings) RemoveValue(value string) {
+	for idx, v := range t.Value {
+		if v == value {
+			t.RemoveIndex(idx)
+		}
+	}
+}
+
 func (t QStrings) MarshalBinary() ([]byte, error) {
 	return json.Marshal(t.Value)
 }
